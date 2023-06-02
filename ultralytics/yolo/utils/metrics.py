@@ -363,7 +363,7 @@ def smooth(y, f=0.05):
 def plot_pr_curve(px, py, ap, save_dir=Path('pr_curve.png'), names=(), on_plot=None):
     """Plots a precision-recall curve."""
     fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
-    py = np.stack(py, axis=1)
+    # py = np.stack(py, axis=1) # EEHA, done before function
 
     if 0 < len(names) < 21:  # display per-class legend if < 21 classes
         for i, y in enumerate(py.T):
@@ -520,10 +520,24 @@ def ap_per_class(tp,
     names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
     names = dict(enumerate(names))  # to dict
     if plot:
+        py = np.stack(py, axis=1) # previously inside plot_pr_curve. Caused access issues with logging
         plot_pr_curve(px, py, ap, save_dir / f'{prefix}PR_curve.png', names, on_plot=on_plot)
         plot_mc_curve(px, f1, save_dir / f'{prefix}F1_curve.png', names, ylabel='F1', on_plot=on_plot)
         plot_mc_curve(px, p, save_dir / f'{prefix}P_curve.png', names, ylabel='Precision', on_plot=on_plot)
         plot_mc_curve(px, r, save_dir / f'{prefix}R_curve.png', names, ylabel='Recall', on_plot=on_plot)
+
+    # EEHA - Store aldetailed results to a file
+    with open(Path(save_dir) / f'results.yaml', 'a') as file:
+        import yaml
+        yaml_data = {'pr_data' : {}}
+        yaml_data['pr_data']['names'] = names
+        yaml_data['pr_data']['px'] = px.tolist()
+        yaml_data['pr_data']['py'] = py.T.tolist()
+        yaml_data['pr_data']['ap'] = ap.tolist()
+        yaml_data['pr_data']['f1'] = f1.tolist()
+        yaml_data['pr_data']['p'] = p.tolist()
+        yaml_data['pr_data']['r'] = r.tolist()
+        yaml.dump(yaml_data, file)
 
     i = smooth(f1.mean(0), 0.1).argmax()  # max F1 index
     p, r, f1 = p[:, i], r[:, i], f1[:, i]

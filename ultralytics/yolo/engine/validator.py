@@ -111,6 +111,7 @@ class BaseValidator:
             assert model is not None, 'Either trainer or model is needed for validation'
             self.device = select_device(self.args.device, self.args.batch)
             self.args.half &= self.device.type != 'cpu'
+            # print(f"[BaseValidator::__call__] - {self.args.data = }")
             model = AutoBackend(model, device=self.device, dnn=self.args.dnn, data=self.args.data, fp16=self.args.half)
             self.model = model
             stride, pt, jit, engine = model.stride, model.pt, model.jit, model.engine
@@ -157,12 +158,12 @@ class BaseValidator:
 
             # Inference
             with dt[1]:
-                preds = model(batch['img'], augment=self.args.augment)
+                preds = model(batch['img'])
 
             # Loss
             with dt[2]:
                 if self.training:
-                    self.loss += model.loss(batch, preds)[1]
+                    self.loss += trainer.criterion(preds, batch)[1]
 
             # Postprocess
             with dt[3]:

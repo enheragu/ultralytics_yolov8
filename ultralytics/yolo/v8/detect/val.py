@@ -148,6 +148,21 @@ class DetectionValidator(BaseValidator):
                                            names=self.names.values(),
                                            normalize=normalize,
                                            on_plot=self.on_plot)
+        # EEHA -- Store all results to a file
+        with open(Path(self.save_dir) / f'results.yaml', 'a') as file:
+            import yaml
+            yaml_data = {}
+            yaml_data['test'] = str(self.save_dir)
+
+            mp, mr, map50, map_data = self.metrics.mean_results()
+            yaml_data['data'] = {'all': {'Images': int(self.seen), 'Instances': int(self.nt_per_class.sum()), 'P': float(mp), 'R': float(mr), 'mAP50': float(map50), 'mAP50-95': float(map_data)}}
+            
+            for i, c in enumerate(self.metrics.ap_class_index):
+                p, r, map50, map_data = self.metrics.class_result(i)
+                yaml_data['data'][self.names[c]] = {'Images': int(self.seen), 'Instances': int(self.nt_per_class[c]), 'P': float(p), 'R': float(r), 'mAP50': float(map50), 'mAP50-95': float(map_data)}
+                      
+            yaml_data['Speed'] = self.metrics.speed
+            yaml.dump(yaml_data, file)
 
     def _process_batch(self, detections, labels):
         """
