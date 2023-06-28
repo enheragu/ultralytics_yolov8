@@ -163,6 +163,8 @@ class BaseValidator:
             # Loss
             with dt[2]:
                 if self.training:
+                    if not hasattr(trainer, 'criterion'):
+                        trainer.criterion = trainer.model.init_criterion()
                     self.loss += trainer.criterion(preds, batch)[1]
 
             # Postprocess
@@ -170,7 +172,7 @@ class BaseValidator:
                 preds = self.postprocess(preds)
 
             self.update_metrics(preds, batch)
-            if self.args.plots and batch_i < 3:
+            if self.args.plots and batch_i < 8:
                 self.plot_val_samples(batch, batch_i)
                 self.plot_predictions(batch, preds, batch_i)
 

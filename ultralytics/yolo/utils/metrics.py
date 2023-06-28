@@ -532,7 +532,7 @@ def ap_per_class(tp,
         yaml_data = {'pr_data' : {}}
         yaml_data['pr_data']['names'] = names
         yaml_data['pr_data']['px'] = px.tolist()
-        yaml_data['pr_data']['py'] = py.T.tolist()
+        yaml_data['pr_data']['py'] = py if type(py) == type(list()) else py.T.tolist()
         yaml_data['pr_data']['ap'] = ap.tolist()
         yaml_data['pr_data']['f1'] = f1.tolist()
         yaml_data['pr_data']['p'] = p.tolist()
