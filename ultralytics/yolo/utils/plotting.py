@@ -336,6 +336,7 @@ def plot_images(images,
             break
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
         im = im.transpose(1, 2, 0)
+        im = im[:,:,:3] # In case more than 3 channels are provided, take only the first 3 of them. Sorry not sorry # EEHA
         mosaic[y:y + h, x:x + w, :] = im
 
     # Resize (optional)
