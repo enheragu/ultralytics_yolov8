@@ -138,7 +138,10 @@ class BaseValidator:
             self.dataloader = self.dataloader or self.get_dataloader(self.data.get(self.args.split), self.args.batch)
 
             model.eval()
-            model.warmup(imgsz=(1 if pt else self.args.batch, 3, imgsz, imgsz))  # warmup
+            ## EEHA changes. Some models might not have yaml attribute :(
+            ch = model.model.yaml['ch'] if hasattr(model, 'model') and hasattr(model.model, 'yaml') else 3
+            
+            model.warmup(imgsz=(1 if pt else self.args.batch, ch, imgsz, imgsz))  # warmup
 
         dt = Profile(), Profile(), Profile(), Profile()
         n_batches = len(self.dataloader)
