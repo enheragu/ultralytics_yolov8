@@ -521,10 +521,16 @@ def ap_per_class(tp,
     names = dict(enumerate(names))  # to dict
     if plot:
         py = np.stack(py, axis=1) # previously inside plot_pr_curve. Caused access issues with logging
-        plot_pr_curve(px, py, ap, save_dir / f'{prefix}PR_curve.png', names, on_plot=on_plot)
-        plot_mc_curve(px, f1, save_dir / f'{prefix}F1_curve.png', names, ylabel='F1', on_plot=on_plot)
-        plot_mc_curve(px, p, save_dir / f'{prefix}P_curve.png', names, ylabel='Precision', on_plot=on_plot)
-        plot_mc_curve(px, r, save_dir / f'{prefix}R_curve.png', names, ylabel='Recall', on_plot=on_plot)
+        try:
+            plot_pr_curve(px, py, ap, save_dir / f'{prefix}PR_curve.png', names, on_plot=on_plot)
+            plot_mc_curve(px, f1, save_dir / f'{prefix}F1_curve.png', names, ylabel='F1', on_plot=on_plot)
+            plot_mc_curve(px, p, save_dir / f'{prefix}P_curve.png', names, ylabel='Precision', on_plot=on_plot)
+            plot_mc_curve(px, r, save_dir / f'{prefix}R_curve.png', names, ylabel='Recall', on_plot=on_plot)
+        except Exception as exc:
+            with open(Path(save_dir) / f'PLOTTING_EXCEPTION.txt', 'a') as file:
+                str_store = f"Catched exception while plotting execution graphs, store excetion in file. Exception was:\n{e}"
+                file.write(str_store)
+
 
     # EEHA - Store aldetailed results to a file
     with open(Path(save_dir) / f'results.yaml', 'a') as file:
