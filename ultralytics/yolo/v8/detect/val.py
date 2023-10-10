@@ -153,6 +153,8 @@ class DetectionValidator(BaseValidator):
             import yaml
             yaml_data = {}
             yaml_data['test'] = str(self.save_dir)
+            yaml_data['model'] = str(self.args.model)
+            yaml_data['name'] = str(self.args.name)
 
             mp, mr, map50, map_data = self.metrics.mean_results()
             yaml_data['data'] = {'all': {'Images': int(self.seen), 'Instances': int(self.nt_per_class.sum()), 'P': float(mp), 'R': float(mr), 'mAP50': float(map50), 'mAP50-95': float(map_data)}}
