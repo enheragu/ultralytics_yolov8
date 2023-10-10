@@ -528,7 +528,7 @@ def ap_per_class(tp,
             plot_mc_curve(px, r, save_dir / f'{prefix}R_curve.png', names, ylabel='Recall', on_plot=on_plot)
         except Exception as exc:
             with open(Path(save_dir) / f'PLOTTING_EXCEPTION.txt', 'a') as file:
-                str_store = f"Catched exception while plotting execution graphs, store excetion in file. Exception was:\n{e}"
+                str_store = f"Catched exception while plotting execution graphs, store excetion in file. Exception was:\n{exc}"
                 file.write(str_store)
 
 
