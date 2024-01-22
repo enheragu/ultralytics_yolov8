@@ -151,19 +151,19 @@ class DetectionValidator(BaseValidator):
         # EEHA -- Store all results to a file
         with open(Path(self.save_dir) / f'results.yaml', 'a') as file:
             import yaml
-            yaml_data = {}
-            yaml_data['test'] = str(self.save_dir)
-            yaml_data['model'] = str(self.args.model)
-            yaml_data['name'] = str(self.args.name)
+            yaml_data = {'validation': {}}
+            yaml_data['validation']['test'] = str(self.save_dir)
+            yaml_data['validation']['model'] = str(self.args.model)
+            yaml_data['validation']['name'] = str(self.args.name)
 
             mp, mr, map50, map_data = self.metrics.mean_results()
-            yaml_data['data'] = {'all': {'Images': int(self.seen), 'Instances': int(self.nt_per_class.sum()), 'P': float(mp), 'R': float(mr), 'mAP50': float(map50), 'mAP50-95': float(map_data)}}
+            yaml_data['validation']['data'] = {'all': {'Images': int(self.seen), 'Instances': int(self.nt_per_class.sum()), 'P': float(mp), 'R': float(mr), 'mAP50': float(map50), 'mAP50-95': float(map_data)}}
             
             for i, c in enumerate(self.metrics.ap_class_index):
                 p, r, map50, map_data = self.metrics.class_result(i)
-                yaml_data['data'][self.names[c]] = {'Images': int(self.seen), 'Instances': int(self.nt_per_class[c]), 'P': float(p), 'R': float(r), 'mAP50': float(map50), 'mAP50-95': float(map_data)}
+                yaml_data['validation']['data'][self.names[c]] = {'Images': int(self.seen), 'Instances': int(self.nt_per_class[c]), 'P': float(p), 'R': float(r), 'mAP50': float(map50), 'mAP50-95': float(map_data)}
                       
-            yaml_data['Speed'] = self.metrics.speed
+            yaml_data['validation']['Speed'] = self.metrics.speed
             yaml.dump(yaml_data, file)
 
     def _process_batch(self, detections, labels):

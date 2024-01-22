@@ -275,6 +275,7 @@ class BaseTrainer:
         self.epoch_time = None
         self.epoch_time_start = time.time()
         self.train_time_start = time.time()
+        self.train_time_start_str = datetime.now().isoformat()
         nb = len(self.train_loader)  # number of batches
         nw = max(round(self.args.warmup_epochs * nb), 100)  # number of warmup iterations
         last_opt_step = -1
@@ -399,6 +400,17 @@ class BaseTrainer:
             self.run_callbacks('on_train_end')
         torch.cuda.empty_cache()
         self.run_callbacks('teardown')
+
+        # EEHA - Store train results to a file
+        with open(Path(self.save_dir) / f'results.yaml', 'a') as file:
+            import yaml
+            yaml_data = {'train_data' : {}}
+            yaml_data['train_data']['epoch_best_fit'] = epoch
+            yaml_data['train_data']['epoch_executed'] = epoch - self.start_epoch + 1
+            yaml_data['train_data']['train_duration_h'] = float(time.time() - self.train_time_start) / 3600.0
+            yaml_data['train_data']['train_start_time'] = self.train_time_start_str
+            yaml_data['train_data']['train_end_time'] = datetime.now().isoformat()
+            yaml.dump(yaml_data, file)
 
     def save_model(self):
         """Save model checkpoints based on various conditions."""
