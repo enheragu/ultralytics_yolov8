@@ -329,14 +329,21 @@ def plot_images(images,
     if np.max(images[0]) <= 1:
         images *= 255  # de-normalise (optional)
 
+
+    ## EEHA Takes a max of 3 channels when more are provided
+    # Stil in torch format, position 0 is numer of channels
+    channels = 3 if images[0].shape[0] > 3 else images[0].shape[0]
+
     # Build Image
-    mosaic = np.full((int(ns * h), int(ns * w), 3), 255, dtype=np.uint8)  # init
+    mosaic = np.full((int(ns * h), int(ns * w), channels), 255, dtype=np.uint8)  # init
     for i, im in enumerate(images):
         if i == max_subplots:  # if last batch has fewer images than we expect
             break
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
         im = im.transpose(1, 2, 0)
-        im = im[:,:,:3] # In case more than 3 channels are provided, take only the first 3 of them. Sorry not sorry # EEHA
+
+        im = im[:,:,:channels] 
+
         mosaic[y:y + h, x:x + w, :] = im
 
     # Resize (optional)
@@ -348,6 +355,14 @@ def plot_images(images,
 
     # Annotate
     fs = int((h + w) * ns * 0.01)  # font size
+    
+    # Turn to BGR image to have colors in labeling and text :)
+    if channels == 1:
+        mosaic = cv2.cvtColor(mosaic, cv2.COLOR_GRAY2BGR)
+    if channels == 2:
+        ch1, ch2 = cv2.split(mosaic)
+        mosaic = cv2.merge([ch1,ch2,np.zeros(ch1.shape,mosaic.dtype)])
+        
     annotator = Annotator(mosaic, line_width=round(fs / 10), font_size=fs, pil=True, example=names)
     for i in range(i + 1):
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin

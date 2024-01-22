@@ -164,7 +164,11 @@ class Mosaic(BaseMixTransform):
 
             # Place img in img4
             if i == 0:  # top left
-                img4 = np.full((s * 2, s * 2, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
+                # EEHA: One channel image has no extra dimmension in shape, nor should have it in mosaic image
+                if len(img.shape) == 3:
+                    img4 = np.full((s * 2, s * 2, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
+                else:
+                    img4 = np.full((s * 2, s * 2), 114, dtype=np.uint8)
                 x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
                 x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
             elif i == 1:  # top right
@@ -200,7 +204,8 @@ class Mosaic(BaseMixTransform):
 
             # Place img in img9
             if i == 0:  # center
-                img9 = np.full((s * 3, s * 3, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
+                channels = 1 if len(img.shape) == 2 else img.shape[2] # EEHA: One channel image has no extra dimmension
+                img9 = np.full((s * 3, s * 3, channels), 114, dtype=np.uint8)  # base image with 4 tiles
                 h0, w0 = h, w
                 c = s, s, s + w, s + h  # xmin, ymin, xmax, ymax (base) coordinates
             elif i == 1:  # top
@@ -486,18 +491,45 @@ class RandomHSV:
     def __call__(self, labels):
         """Applies random horizontal or vertical flip to an image with a given probability."""
         img = labels['img']
-        if self.hgain or self.sgain or self.vgain:
-            r = np.random.uniform(-1, 1, 3) * [self.hgain, self.sgain, self.vgain] + 1  # random gains
-            hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
-            dtype = img.dtype  # uint8
+        channels = 1 if len(img.shape) == 2 else img.shape[2] # EEHA: One channel image has no extra dimmension
+        if channels == 3: # NEEDS 3 CHANNELS FOR THIS TRANSFORMATIONS
+            if self.hgain or self.sgain or self.vgain:
+                r = np.random.uniform(-1, 1, 3) * [self.hgain, self.sgain, self.vgain] + 1  # random gains
+                hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
+                dtype = img.dtype  # uint8
 
-            x = np.arange(0, 256, dtype=r.dtype)
-            lut_hue = ((x * r[0]) % 180).astype(dtype)
-            lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
-            lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
+                x = np.arange(0, 256, dtype=r.dtype)
+                lut_hue = ((x * r[0]) % 180).astype(dtype)
+                lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
+                lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
 
-            im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
-            cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=img)  # no return needed
+                im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
+                cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=img)  # no return needed
+        
+        elif channels == 1: # IF ONLY ONE CHANNEL MAKE RANDOM CHANGES IN BRIGHTNESS
+            if self.hgain or self.sgain or self.vgain:
+                r = np.random.uniform(-0.5, 0.5, 1) + 1  # random gains
+                grey = img
+                dtype = img.dtype  # uint8
+
+                x = np.arange(0, 256, dtype=r.dtype)
+                lut_grey = np.clip(x * r[0], 0, 255).astype(dtype)
+
+                img = cv2.LUT(grey, lut_grey) # no return needed
+
+        else:
+            if self.hgain or self.sgain or self.vgain:
+                r = np.random.uniform(-0.5, 0.5, channels) + 1  # random gains
+                split_image = cv2.split(img)
+                dtype = img.dtype  # uint8
+
+                x = np.arange(0, 256, dtype=r.dtype)
+                for ch in split_image:
+                    lut = np.clip(x * r[1], 0, 255).astype(dtype)
+                    ch = cv2.LUT(ch, lut)
+
+                img = cv2.merge(split_image)
+
         return labels
 
 
@@ -616,7 +648,8 @@ class CopyPaste:
         instances.denormalize(w, h)
         if self.p and len(instances.segments):
             n = len(instances)
-            _, w, _ = im.shape  # height, width, channels
+            # _, w, _ = im.shape  # height, width, channels
+            w = im.shape[1]
             im_new = np.zeros(im.shape, np.uint8)
 
             # Calculate ioa first then select indexes randomly
@@ -739,10 +772,16 @@ class Format:
 
     def _format_img(self, img):
         """Format the image for YOLOv5 from Numpy array to PyTorch tensor."""
+        """
+            OpenCV img = cv2.imread(path) loads an image with HWC-layout (height, width, channels), 
+            while Pytorch requires CHW-layout. So we have to do np.transpose(image,(2,0,1)) for 
+            HWC->CHW transformation.
+        """
         if len(img.shape) < 3:
-            img = np.expand_dims(img, -1)
+            img = np.expand_dims(img, -1) 
         img = np.ascontiguousarray(img.transpose(2, 0, 1)[::-1])
-        img = torch.from_numpy(img)
+        # torch.from_numpy does not support negative strides that numpy supports, makes copy of it to avoid issue
+        img = torch.from_numpy(img.copy())
         return img
 
     def _format_segments(self, instances, cls, w, h):
