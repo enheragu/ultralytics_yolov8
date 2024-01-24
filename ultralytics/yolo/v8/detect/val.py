@@ -148,22 +148,35 @@ class DetectionValidator(BaseValidator):
                                            names=self.names.values(),
                                            normalize=normalize,
                                            on_plot=self.on_plot)
+        
         # EEHA -- Store all results to a file
-        with open(Path(self.save_dir) / f'results.yaml', 'a') as file:
+        if Path(str(self.save_dir)+'/results.yaml').exists():
+            with open(Path(self.save_dir) / f'results.yaml') as file:
+                import yaml
+                from yaml.loader import SafeLoader
+                yaml_data = yaml.load(file, Loader=SafeLoader)
+                iter = 0 if not "val_epoch" in yaml_data else yaml_data["val_epoch"]
+        else:
+            yaml_data = {}
+            iter = 0
+
+        with open(Path(self.save_dir) / f'results.yaml', 'w') as file:
             import yaml
-            yaml_data = {'validation': {}}
-            yaml_data['validation']['test'] = str(self.save_dir)
-            yaml_data['validation']['model'] = str(self.args.model)
-            yaml_data['validation']['name'] = str(self.args.name)
+            val_tag = f'validation_{iter}'
+            yaml_data[val_tag] = {}
+            yaml_data[val_tag]['test'] = str(self.save_dir)
+            yaml_data[val_tag]['model'] = str(self.args.model)
+            yaml_data[val_tag]['name'] = str(self.args.name)
 
             mp, mr, map50, map_data = self.metrics.mean_results()
-            yaml_data['validation']['data'] = {'all': {'Images': int(self.seen), 'Instances': int(self.nt_per_class.sum()), 'P': float(mp), 'R': float(mr), 'mAP50': float(map50), 'mAP50-95': float(map_data)}}
+            yaml_data[val_tag]['data'] = {'all': {'Images': int(self.seen), 'Instances': int(self.nt_per_class.sum()), 'P': float(mp), 'R': float(mr), 'mAP50': float(map50), 'mAP50-95': float(map_data)}}
             
             for i, c in enumerate(self.metrics.ap_class_index):
                 p, r, map50, map_data = self.metrics.class_result(i)
-                yaml_data['validation']['data'][self.names[c]] = {'Images': int(self.seen), 'Instances': int(self.nt_per_class[c]), 'P': float(p), 'R': float(r), 'mAP50': float(map50), 'mAP50-95': float(map_data)}
+                yaml_data[val_tag]['data'][self.names[c]] = {'Images': int(self.seen), 'Instances': int(self.nt_per_class[c]), 'P': float(p), 'R': float(r), 'mAP50': float(map50), 'mAP50-95': float(map_data)}
                       
-            yaml_data['validation']['Speed'] = self.metrics.speed
+            yaml_data[val_tag]['Speed'] = self.metrics.speed
+            yaml_data["val_epoch"] = iter + 1
             yaml.dump(yaml_data, file)
 
     def _process_batch(self, detections, labels):

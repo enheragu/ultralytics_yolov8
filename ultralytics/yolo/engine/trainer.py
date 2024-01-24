@@ -405,8 +405,9 @@ class BaseTrainer:
         with open(Path(self.save_dir) / f'results.yaml', 'a') as file:
             import yaml
             yaml_data = {'train_data' : {}}
-            yaml_data['train_data']['epoch_best_fit'] = epoch
-            yaml_data['train_data']['epoch_executed'] = epoch - self.start_epoch + 1
+            yaml_data['train_data']['epoch_best_fit_index'] = self.stopper.best_epoch - 1
+            yaml_data['train_data']['best_fitness'] = self.best_fitness
+            yaml_data['train_data']['epoch_executed_index'] = self.epoch
             yaml_data['train_data']['train_duration_h'] = float(time.time() - self.train_time_start) / 3600.0
             yaml_data['train_data']['train_start_time'] = self.train_time_start_str
             yaml_data['train_data']['train_end_time'] = datetime.now().isoformat()

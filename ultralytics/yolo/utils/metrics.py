@@ -512,15 +512,15 @@ def ap_per_class(tp,
         # AP from recall-precision curve
         for j in range(tp.shape[1]):
             ap[ci, j], mpre, mrec = compute_ap(recall[:, j], precision[:, j])
-            if plot and j == 0:
+            if j == 0: # and plot: ## Store py values always not only when plotting
                 py.append(np.interp(px, mrec, mpre))  # precision at mAP@0.5
 
     # Compute F1 (harmonic mean of precision and recall)
     f1 = 2 * p * r / (p + r + eps)
     names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
     names = dict(enumerate(names))  # to dict
+    py = np.stack(py, axis=1) # previously inside plot_pr_curve. Caused access issues with logging. Even when no plotting, store py
     if plot:
-        py = np.stack(py, axis=1) # previously inside plot_pr_curve. Caused access issues with logging
         try:
             plot_pr_curve(px, py, ap, save_dir / f'{prefix}PR_curve.png', names, on_plot=on_plot)
             plot_mc_curve(px, f1, save_dir / f'{prefix}F1_curve.png', names, ylabel='F1', on_plot=on_plot)
@@ -531,25 +531,40 @@ def ap_per_class(tp,
                 str_store = f"Catched exception while plotting execution graphs, store excetion in file. Exception was:\n{exc}"
                 file.write(str_store)
 
-
+    i = smooth(f1.mean(0), 0.1).argmax()  # max F1 index
+    p_f1max, r_f1max, f1_f1max = p[:, i], r[:, i], f1[:, i]
+    tp = (r_f1max * nt).round()  # true positives
+    fp = (tp / (p_f1max + eps) - tp).round()  # false positives
+    
     # EEHA - Store aldetailed results to a file
-    with open(Path(save_dir) / f'results.yaml', 'a') as file:
+    if Path(str(save_dir)+'/results.yaml').exists():
+        with open(Path(save_dir) / f'results.yaml') as file:
+            import yaml
+            from yaml.loader import SafeLoader
+            yaml_data = yaml.load(file, Loader=SafeLoader)
+            iter = 0 if not "pr_epoch" in yaml_data else yaml_data["pr_epoch"]
+    else:
+        yaml_data = {}
+        iter = 0
+
+    with open(Path(save_dir) / f'results.yaml', 'w') as file:
         import yaml
-        yaml_data = {'pr_data' : {}}
-        yaml_data['pr_data']['names'] = names
-        yaml_data['pr_data']['px'] = px.tolist()
-        yaml_data['pr_data']['py'] = py if type(py) == type(list()) else py.T.tolist()
-        yaml_data['pr_data']['ap'] = ap.tolist()
-        yaml_data['pr_data']['f1'] = f1.tolist()
-        yaml_data['pr_data']['p'] = p.tolist()
-        yaml_data['pr_data']['r'] = r.tolist()
+        pr_tag = f'pr_data_{iter}'
+        yaml_data[pr_tag] = {}
+        yaml_data[pr_tag]['names'] = names
+        yaml_data[pr_tag]['px'] = px.tolist()
+        yaml_data[pr_tag]['py'] = py if type(py) == type(list()) else py.T.tolist()
+        yaml_data[pr_tag]['ap'] = ap.tolist()
+        yaml_data[pr_tag]['f1'] = f1.tolist()
+        yaml_data[pr_tag]['p'] = p.tolist()
+        yaml_data[pr_tag]['r'] = r.tolist()
+        yaml_data[pr_tag]['max_f1_index'] = i.item()
+        yaml_data[pr_tag]['true_positives'] = tp.tolist()
+        yaml_data[pr_tag]['false_positives'] = fp.tolist()
+        yaml_data["pr_epoch"] = iter + 1
         yaml.dump(yaml_data, file)
 
-    i = smooth(f1.mean(0), 0.1).argmax()  # max F1 index
-    p, r, f1 = p[:, i], r[:, i], f1[:, i]
-    tp = (r * nt).round()  # true positives
-    fp = (tp / (p + eps) - tp).round()  # false positives
-    return tp, fp, p, r, f1, ap, unique_classes.astype(int)
+    return tp, fp, p_f1max, r_f1max, f1_f1max, ap, unique_classes.astype(int)
 
 
 class Metric(SimpleClass):
