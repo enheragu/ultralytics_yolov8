@@ -44,6 +44,7 @@ class BaseDataset(Dataset):
         ni (int): Number of images in the dataset.
         ims (list): List of loaded images.
         npy_files (list): List of numpy file paths.
+        npz_files (list): List of numpy compressed file paths.
         transforms (callable): Image transformation function.
     """
 
@@ -89,6 +90,7 @@ class BaseDataset(Dataset):
             cache = False
         self.ims, self.im_hw0, self.im_hw = [None] * self.ni, [None] * self.ni, [None] * self.ni
         self.npy_files = [Path(f).with_suffix('.npy') for f in self.im_files]
+        self.npz_files = [Path(f).with_suffix('.npz') for f in self.im_files]
         if cache:
             self.cache_images(cache)
 
@@ -142,10 +144,12 @@ class BaseDataset(Dataset):
 
     def load_image(self, i):
         """Loads 1 image from dataset index 'i', returns (im, resized hw)."""
-        im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i]
+        im, f, fn, fnz = self.ims[i], self.im_files[i], self.npy_files[i], self.npz_files[i]
         if im is None:  # not cached in RAM
             if fn.exists():  # load npy
                 im = np.load(fn)
+            elif fnz.exists():
+                im = np.load(fn)["image"]
             else:  # read image
                 im = cv2.imread(f)  # BGR
                 if im is None:
@@ -178,7 +182,14 @@ class BaseDataset(Dataset):
             pbar = tqdm(enumerate(results), total=self.ni, bar_format=TQDM_BAR_FORMAT, disable=LOCAL_RANK > 0)
             for i, x in pbar:
                 if cache == 'disk':
-                    b += self.npy_files[i].stat().st_size
+                    if self.npy_files[i].exists():
+                        b += self.npy_files[i].stat().st_size
+                    elif self.npz_files[i].exists():
+                        b += self.npz_files[i].stat().st_size
+                    else:
+                        import errno
+                        # Could not find npy nor npz files
+                        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), self.npz_files[i])
                 else:  # 'ram'
                     self.ims[i], self.im_hw0[i], self.im_hw[i] = x  # im, hw_orig, hw_resized = load_image(self, i)
                     b += self.ims[i].nbytes
@@ -188,7 +199,8 @@ class BaseDataset(Dataset):
     def cache_images_to_disk(self, i):
         """Saves an image as an *.npy file for faster loading."""
         f = self.npy_files[i]
-        if not f.exists():
+        fz = self.npz_files[i]
+        if not f.exists() and not fz.exists():
             np.save(f.as_posix(), cv2.imread(self.im_files[i]))
 
     def check_cache_ram(self, safety_margin=0.5):

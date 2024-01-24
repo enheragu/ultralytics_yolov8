@@ -24,8 +24,8 @@ from ultralytics.yolo.utils.downloads import download, safe_download, unzip_file
 from ultralytics.yolo.utils.ops import segments2boxes
 
 HELP_URL = 'See https://docs.ultralytics.com/yolov5/tutorials/train_custom_data'
-# EEHA add npy to img_formats
-IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm', 'npy'  # image suffixes
+# EEHA add npy and npz to img_formats
+IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm', 'npy', 'npz'  # image suffixes
 VID_FORMATS = 'asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'wmv', 'webm'  # video suffixes
 PIN_MEMORY = str(os.getenv('PIN_MEMORY', True)).lower() == 'true'  # global pin_memory for dataloaders
 IMAGENET_MEAN = 0.485, 0.456, 0.406  # RGB mean
@@ -67,9 +67,13 @@ def verify_image_label(args):
     # Number (missing, found, empty, corrupt), message, segments, keypoints
     nm, nf, ne, nc, msg, segments, keypoints = 0, 0, 0, 0, '', [], None
     try:
-        # EEHA handle npy when checking image to label
+        # EEHA handle npy and npz when checking image to label
         if ".npy" in im_file:
             im = np.load(im_file)
+            shape = im.shape
+            shape = (shape[1], shape[0])  # hw
+        elif ".npz" in im_file:
+            im = np.load(im_file)["image"]
             shape = im.shape
             shape = (shape[1], shape[0])  # hw
         else:
