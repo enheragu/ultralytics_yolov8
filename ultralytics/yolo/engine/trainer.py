@@ -403,9 +403,9 @@ class BaseTrainer:
         self.run_callbacks('teardown')
 
         device_type = self.device.type
-        if device_type == 'cuda:0':
+        if device_type == 'cuda':
             p = torch.cuda.get_device_properties(self.args.device)
-            device_type = "CUDA:{d} ({p.name}, {p.total_memory / (1 << 20):.0f}MiB)"
+            device_type = f"({p.name}, {p.total_memory / (1 << 20):.0f}MiB)"
                 
         # EEHA - Store train results to a file
         with open(Path(self.save_dir) / f'results.yaml', 'a') as file:
@@ -421,7 +421,7 @@ class BaseTrainer:
             yaml_data['dataset_info'] = self.data
             yaml_data['system_data']['YOLO_v'] = __version__
             yaml_data['system_data']['python_v'] = sys.version
-            yaml_data['system_data']['torch_v'] = torch.__version__
+            yaml_data['system_data']['torch_v'] = str(torch.__version__)
             yaml_data['system_data']['device_type'] = device_type
             yaml.dump(yaml_data, file)
 
