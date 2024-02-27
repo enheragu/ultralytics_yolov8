@@ -404,8 +404,12 @@ class BaseTrainer:
 
         device_type = self.device.type
         if device_type == 'cuda':
-            p = torch.cuda.get_device_properties(self.args.device)
-            device_type = f"({p.name}, {p.total_memory / (1 << 20):.0f}MiB)"
+            try:
+                p = torch.cuda.get_device_properties(self.args.device)
+                device_type = f"({p.name}, {p.total_memory / (1 << 20):.0f}MiB)"
+            except:
+                p = torch.cuda.get_device_properties(0)
+                device_type = f"(ERROR Invalid device ID for device {self.args.device}. Taken 0 instead: {p.name}, {p.total_memory / (1 << 20):.0f}MiB)"
                 
         # EEHA - Store train results to a file
         with open(Path(self.save_dir) / f'results.yaml', 'a') as file:
