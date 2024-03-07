@@ -61,8 +61,10 @@ class BaseDataset(Dataset):
                  pad=0.5,
                  single_cls=False,
                  classes=None,
-                 fraction=1.0):
+                 fraction=1.0,
+                 ch = 3): ## EEHA add ch to load only requested channels
         super().__init__()
+        self.ch = ch
         self.img_path = img_path
         self.imgsz = imgsz
         self.augment = augment
@@ -147,9 +149,13 @@ class BaseDataset(Dataset):
         im, f, fn, fnz = self.ims[i], self.im_files[i], self.npy_files[i], self.npz_files[i]
         if im is None:  # not cached in RAM
             if fn.exists():  # load npy
-                im = np.load(fn)
+                im = np.load(fn) ## EEHA load only requested channel num
+                if len(im.shape) > 2:
+                    im = im[:,:,:self.ch]
             elif fnz.exists():
-                im = np.load(fn)["image"]
+                im = np.load(fn)["image"] ## EEHA load only requested channel num
+                if len(im.shape) > 2:
+                    im = im[:,:,:self.ch]
             else:  # read image
                 im = cv2.imread(f)  # BGR
                 if im is None:

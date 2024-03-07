@@ -16,7 +16,7 @@ from ultralytics.yolo.utils.torch_utils import de_parallel, torch_distributed_ze
 # BaseTrainer python usage
 class DetectionTrainer(BaseTrainer):
 
-    def build_dataset(self, img_path, mode='train', batch=None):
+    def build_dataset(self, img_path, mode='train', batch=None, ch = 3):
         """Build YOLO Dataset
 
         Args:
@@ -25,7 +25,7 @@ class DetectionTrainer(BaseTrainer):
             batch (int, optional): Size of batches, this is for `rect`. Defaults to None.
         """
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
-        return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, rect=mode == 'val', stride=gs)
+        return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, rect=mode == 'val', stride=gs, ch = ch)
 
     def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode='train'):
         """TODO: manage splits differently."""
@@ -51,7 +51,7 @@ class DetectionTrainer(BaseTrainer):
                                      seed=self.args.seed)[0]
         assert mode in ['train', 'val']
         with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
-            dataset = self.build_dataset(dataset_path, mode, batch_size)
+            dataset = self.build_dataset(dataset_path, mode, batch_size, ch = self.model.yaml['ch']) ## EEHA
         shuffle = mode == 'train'
         if getattr(dataset, 'rect', False) and shuffle:
             LOGGER.warning("WARNING ⚠️ 'rect=True' is incompatible with DataLoader shuffle, setting shuffle=False")

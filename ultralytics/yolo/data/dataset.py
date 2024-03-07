@@ -32,6 +32,7 @@ class YOLODataset(BaseDataset):
     rand_interp_methods = [cv2.INTER_NEAREST, cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA, cv2.INTER_LANCZOS4]
 
     def __init__(self, *args, data=None, use_segments=False, use_keypoints=False, **kwargs):
+        ## EEHA add CH to load only requested channles
         self.use_segments = use_segments
         self.use_keypoints = use_keypoints
         self.data = data
@@ -57,7 +58,7 @@ class YOLODataset(BaseDataset):
             results = pool.imap(func=verify_image_label,
                                 iterable=zip(self.im_files, self.label_files, repeat(self.prefix),
                                              repeat(self.use_keypoints), repeat(len(self.data['names'])), repeat(nkpt),
-                                             repeat(ndim)))
+                                             repeat(ndim), repeat(self.ch)))
             pbar = tqdm(results, desc=desc, total=total, bar_format=TQDM_BAR_FORMAT)
             for im_file, lb, shape, segments, keypoint, nm_f, nf_f, ne_f, nc_f, msg in pbar:
                 nm += nm_f

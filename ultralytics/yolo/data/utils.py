@@ -63,17 +63,21 @@ def exif_size(img):
 
 def verify_image_label(args):
     """Verify one image-label pair."""
-    im_file, lb_file, prefix, keypoint, num_cls, nkpt, ndim = args
+    im_file, lb_file, prefix, keypoint, num_cls, nkpt, ndim, ch  = args
     # Number (missing, found, empty, corrupt), message, segments, keypoints
     nm, nf, ne, nc, msg, segments, keypoints = 0, 0, 0, 0, '', [], None
     try:
         # EEHA handle npy and npz when checking image to label
         if ".npy" in im_file:
             im = np.load(im_file)
+            if len(im.shape) > 2: ## EEHA keep requested CH if input has more than one CH
+                im = im[:,:,:ch]
             shape = im.shape
             shape = (shape[1], shape[0])  # hw
         elif ".npz" in im_file:
             im = np.load(im_file)["image"]
+            if len(im.shape) > 2: ## EEHA keep requested CH if input has more than one CH
+                im = im[:,:,:ch]
             shape = im.shape
             shape = (shape[1], shape[0])  # hw
         else:
