@@ -153,7 +153,7 @@ class BaseDataset(Dataset):
                 if len(im.shape) > 2:
                     im = im[:,:,:self.ch]
             elif fnz.exists():
-                im = np.load(fn)["image"] ## EEHA load only requested channel num
+                im = np.load(fnz)["image"] ## EEHA load only requested channel num
                 if len(im.shape) > 2:
                     im = im[:,:,:self.ch]
             else:  # read image
