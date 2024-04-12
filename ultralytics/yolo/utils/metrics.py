@@ -489,7 +489,7 @@ def ap_per_class(tp,
 
     # Create Precision-Recall curve and compute AP for each class
     px, py = np.linspace(0, 1, 1000), []  # for plotting
-    ap, p, r = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000))
+    ap, p, r, mr, ffpi = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000))
     for ci, c in enumerate(unique_classes):
         i = pred_cls == c
         n_l = nt[ci]  # number of labels
@@ -499,6 +499,7 @@ def ap_per_class(tp,
 
         # Accumulate FPs and TPs
         fpc = (1 - tp[i]).cumsum(0)
+        fnc = (1 - np.invert(tp[i])).cumsum(0)
         tpc = tp[i].cumsum(0)
 
         # Recall
@@ -508,6 +509,13 @@ def ap_per_class(tp,
         # Precision
         precision = tpc / (tpc + fpc)  # precision curve
         p[ci] = np.interp(-px, -conf[i], precision[:, 0], left=1)  # p at pr_score
+
+        # missrate = fn(c) / tp(c) + fn(c) = fn(c) / all ground truth
+        missrate =  fnc / (n_l + eps) # missrate curve
+        mr[ci] = np.interp(-px, -conf[i], missrate[:, 0], left=1) 
+
+        # ffpi = fp(c) / n_images
+        # ffpi = fpc / nimg # TBD no number of images here
 
         # AP from recall-precision curve
         for j in range(tp.shape[1]):
@@ -526,13 +534,14 @@ def ap_per_class(tp,
             plot_mc_curve(px, f1, save_dir / f'{prefix}F1_curve.png', names, ylabel='F1', on_plot=on_plot)
             plot_mc_curve(px, p, save_dir / f'{prefix}P_curve.png', names, ylabel='Precision', on_plot=on_plot)
             plot_mc_curve(px, r, save_dir / f'{prefix}R_curve.png', names, ylabel='Recall', on_plot=on_plot)
+            plot_mc_curve(px, mr, save_dir / f'{prefix}MR_curve.png', names, ylabel='MissRate', on_plot=on_plot)
         except Exception as exc:
             with open(Path(save_dir) / f'PLOTTING_EXCEPTION.txt', 'a') as file:
                 str_store = f"Catched exception while plotting execution graphs, store excetion in file. Exception was:\n{exc}"
                 file.write(str_store)
 
     i = smooth(f1.mean(0), 0.1).argmax()  # max F1 index
-    p_f1max, r_f1max, f1_f1max = p[:, i], r[:, i], f1[:, i]
+    p_f1max, r_f1max, f1_f1max, mr_f1max = p[:, i], r[:, i], f1[:, i], mr[:, i]
     tp = (r_f1max * nt).round()  # true positives
     fp = (tp / (p_f1max + eps) - tp).round()  # false positives
     
@@ -552,12 +561,15 @@ def ap_per_class(tp,
         pr_tag = f'pr_data_{iter}'
         yaml_data[pr_tag] = {}
         yaml_data[pr_tag]['names'] = names
-        yaml_data[pr_tag]['px'] = px.tolist()
-        yaml_data[pr_tag]['py'] = py if type(py) == type(list()) else py.T.tolist()
-        yaml_data[pr_tag]['ap'] = ap.tolist()
-        yaml_data[pr_tag]['f1'] = f1.tolist()
-        yaml_data[pr_tag]['p'] = p.tolist()
-        yaml_data[pr_tag]['r'] = r.tolist()
+        yaml_data[pr_tag]['px_plot'] = px.tolist()
+        yaml_data[pr_tag]['py_plot'] = py if type(py) == type(list()) else py.T.tolist()
+        yaml_data[pr_tag]['ap_plot'] = ap.tolist()
+        yaml_data[pr_tag]['f1_plot'] = f1.tolist()
+        yaml_data[pr_tag]['mr_plot'] = mr.tolist()
+        yaml_data[pr_tag]['p'] = p_f1max.tolist()
+        yaml_data[pr_tag]['r'] = r_f1max.tolist()
+        yaml_data[pr_tag]['f1'] = f1_f1max.tolist()
+        yaml_data[pr_tag]['mr'] = mr_f1max.tolist()
         yaml_data[pr_tag]['max_f1_index'] = i.item()
         yaml_data[pr_tag]['true_positives'] = tp.tolist()
         yaml_data[pr_tag]['false_positives'] = fp.tolist()

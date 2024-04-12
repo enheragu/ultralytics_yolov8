@@ -169,7 +169,10 @@ class DetectionValidator(BaseValidator):
             yaml_data[val_tag]['name'] = str(self.args.name)
 
             mp, mr, map50, map_data = self.metrics.mean_results()
-            yaml_data[val_tag]['data'] = {'all': {'Images': int(self.seen), 'Instances': int(self.nt_per_class.sum()), 'P': float(mp), 'R': float(mr), 'mAP50': float(map50), 'mAP50-95': float(map_data)}}
+            yaml_data[val_tag]['data'] = {'all': {'Images': int(self.seen), 'Instances': int(self.nt_per_class.sum()), 
+                                                  'mP': float(mp), 'mR': float(mr), 'mAP50': float(map50),
+                                                  'mAP75': float(self.metrics.box.map75), 
+                                                  'mAP50-95': float(map_data)}}
             
             for i, c in enumerate(self.metrics.ap_class_index):
                 p, r, map50, map_data = self.metrics.class_result(i)
