@@ -565,6 +565,8 @@ def ap_per_class(tp,
         yaml_data[pr_tag]['py_plot'] = py if type(py) == type(list()) else py.T.tolist()
         yaml_data[pr_tag]['ap_plot'] = ap.tolist()
         yaml_data[pr_tag]['f1_plot'] = f1.tolist()
+        yaml_data[pr_tag]['p_plot'] = p.tolist()
+        yaml_data[pr_tag]['r_plot'] = r.tolist()
         yaml_data[pr_tag]['mr_plot'] = mr.tolist()
         yaml_data[pr_tag]['p'] = p_f1max.tolist()
         yaml_data[pr_tag]['r'] = r_f1max.tolist()
