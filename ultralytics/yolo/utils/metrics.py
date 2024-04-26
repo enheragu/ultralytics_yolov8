@@ -451,7 +451,8 @@ def ap_per_class(tp,
                  save_dir=Path(),
                  names=(),
                  eps=1e-16,
-                 prefix=''):
+                 prefix='', 
+                 n_images = None):
     """
     Computes the average precision per class for object detection evaluation.
 
@@ -489,6 +490,7 @@ def ap_per_class(tp,
 
     # Create Precision-Recall curve and compute AP for each class
     px, py = np.linspace(0, 1, 1000), []  # for plotting
+    py_MRFFPI = []
     ap, p, r, mr, ffpi = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000))
     for ci, c in enumerate(unique_classes):
         i = pred_cls == c
@@ -514,14 +516,37 @@ def ap_per_class(tp,
         missrate =  fnc / (n_l + eps) # missrate curve
         mr[ci] = np.interp(-px, -conf[i], missrate[:, 0], left=1) 
 
-        # ffpi = fp(c) / n_images
-        # ffpi = fpc / nimg # TBD no number of images here
+        if n_images:
+            # ffpi = fp(c) / n_images
+            fpcimages = fpc / n_images
+            ffpi[ci] = np.interp(-px, -conf[i], fpcimages[:, 0], left=1) 
 
         # AP from recall-precision curve
         for j in range(tp.shape[1]):
             ap[ci, j], mpre, mrec = compute_ap(recall[:, j], precision[:, j])
             if j == 0: # and plot: ## Store py values always not only when plotting
                 py.append(np.interp(px, mrec, mpre))  # precision at mAP@0.5
+
+            # MR vs FFPI plot
+            if j == 0: # and plot: ## Store py values always not only when plotting
+                max_mr = np.flip(np.maximum.accumulate(np.flip(mr[:, j])))
+                py_MRFFPI.append(np.interp(px, ffpi[:, j], max_mr))
+
+
+    log_ffpi_reference = np.logspace(np.log10(min(ffpi)), np.log10(max(ffpi)), num=9)
+    def calculate_lamr_log_scale(recall, missrate, fp_reference_points_log):
+        lamr_sum = np.sum(fp_reference_points_log * np.log(missrate))
+        lamr_avg = np.exp(1 / len(fp_reference_points_log) * lamr_sum)
+        return lamr_avg
+
+    lamr_classes_log_scale = []
+    for ci in range(nc):
+        lamr_log_scale = calculate_lamr_log_scale(r[ci], mr[ci], log_ffpi_reference)
+        lamr_classes_log_scale.append(lamr_log_scale)
+
+    lamr_average_log_scale = np.mean(lamr_classes_log_scale)
+
+
 
     # Compute F1 (harmonic mean of precision and recall)
     f1 = 2 * p * r / (p + r + eps)
@@ -535,6 +560,7 @@ def ap_per_class(tp,
             plot_mc_curve(px, p, save_dir / f'{prefix}P_curve.png', names, ylabel='Precision', on_plot=on_plot)
             plot_mc_curve(px, r, save_dir / f'{prefix}R_curve.png', names, ylabel='Recall', on_plot=on_plot)
             plot_mc_curve(px, mr, save_dir / f'{prefix}MR_curve.png', names, ylabel='MissRate', on_plot=on_plot)
+            plot_mc_curve(px, py_MRFFPI, save_dir / f'{prefix}MR_FFPI_curve.png', names, xlabel='FFPI', ylabel='MissRate', on_plot=on_plot)
         except Exception as exc:
             with open(Path(save_dir) / f'PLOTTING_EXCEPTION.txt', 'a') as file:
                 str_store = f"Catched exception while plotting execution graphs, store excetion in file. Exception was:\n{exc}"
@@ -547,36 +573,35 @@ def ap_per_class(tp,
     
     # EEHA - Store aldetailed results to a file
     if Path(str(save_dir)+'/results.yaml').exists():
-        with open(Path(save_dir) / f'results.yaml') as file:
-            import yaml
-            from yaml.loader import SafeLoader
-            yaml_data = yaml.load(file, Loader=SafeLoader)
-            iter = 0 if not "pr_epoch" in yaml_data else yaml_data["pr_epoch"]
+        from utils import parseYaml, dumpYaml
+        yaml_data = parseYaml(Path(save_dir) / f'results.yaml')
+        iter = 0 if not "pr_epoch" in yaml_data else yaml_data["pr_epoch"]
     else:
         yaml_data = {}
         iter = 0
 
-    with open(Path(save_dir) / f'results.yaml', 'w') as file:
-        import yaml
-        pr_tag = f'pr_data_{iter}'
-        yaml_data[pr_tag] = {}
-        yaml_data[pr_tag]['names'] = names
-        yaml_data[pr_tag]['px_plot'] = px.tolist()
-        yaml_data[pr_tag]['py_plot'] = py if type(py) == type(list()) else py.T.tolist()
-        yaml_data[pr_tag]['ap_plot'] = ap.tolist()
-        yaml_data[pr_tag]['f1_plot'] = f1.tolist()
-        yaml_data[pr_tag]['p_plot'] = p.tolist()
-        yaml_data[pr_tag]['r_plot'] = r.tolist()
-        yaml_data[pr_tag]['mr_plot'] = mr.tolist()
-        yaml_data[pr_tag]['p'] = p_f1max.tolist()
-        yaml_data[pr_tag]['r'] = r_f1max.tolist()
-        yaml_data[pr_tag]['f1'] = f1_f1max.tolist()
-        yaml_data[pr_tag]['mr'] = mr_f1max.tolist()
-        yaml_data[pr_tag]['max_f1_index'] = i.item()
-        yaml_data[pr_tag]['true_positives'] = tp.tolist()
-        yaml_data[pr_tag]['false_positives'] = fp.tolist()
-        yaml_data["pr_epoch"] = iter + 1
-        yaml.dump(yaml_data, file)
+    from utils import parseYaml, dumpYaml
+    pr_tag = f'pr_data_{iter}'
+    yaml_data[pr_tag] = {}
+    yaml_data[pr_tag]['names'] = names
+    yaml_data[pr_tag]['px_plot'] = px.tolist()
+    yaml_data[pr_tag]['py_plot'] = py if type(py) == type(list()) else py.T.tolist()
+    yaml_data[pr_tag]['mrffpi_plot'] = [array.tolist() for array in py_MRFFPI]
+    yaml_data[pr_tag]['ap_plot'] = ap.tolist()
+    yaml_data[pr_tag]['f1_plot'] = f1.tolist()
+    yaml_data[pr_tag]['p_plot'] = p.tolist()
+    yaml_data[pr_tag]['r_plot'] = r.tolist()
+    yaml_data[pr_tag]['mr_plot'] = mr.tolist()
+    yaml_data[pr_tag]['p'] = p_f1max.tolist()
+    yaml_data[pr_tag]['r'] = r_f1max.tolist()
+    yaml_data[pr_tag]['f1'] = f1_f1max.tolist()
+    yaml_data[pr_tag]['mr'] = mr_f1max.tolist()
+    yaml_data[pr_tag]['lamr'] = lamr_average_log_scale.tolist()
+    yaml_data[pr_tag]['max_f1_index'] = i.item()
+    yaml_data[pr_tag]['true_positives'] = tp.tolist()
+    yaml_data[pr_tag]['false_positives'] = fp.tolist()
+    yaml_data["pr_epoch"] = iter + 1
+    dumpYaml(Path(save_dir) / f'results.yaml', yaml_data)
 
     return tp, fp, p_f1max, r_f1max, f1_f1max, ap, unique_classes.astype(int)
 
@@ -754,7 +779,7 @@ class DetMetrics(SimpleClass):
         self.box = Metric()
         self.speed = {'preprocess': 0.0, 'inference': 0.0, 'loss': 0.0, 'postprocess': 0.0}
 
-    def process(self, tp, conf, pred_cls, target_cls):
+    def process(self, tp, conf, pred_cls, target_cls, n_images = 0):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(tp,
                                conf,
@@ -763,7 +788,8 @@ class DetMetrics(SimpleClass):
                                plot=self.plot,
                                save_dir=self.save_dir,
                                names=self.names,
-                               on_plot=self.on_plot)[2:]
+                               on_plot=self.on_plot, 
+                               n_images = n_images)[2:]
         self.box.nc = len(self.names)
         self.box.update(results)
 

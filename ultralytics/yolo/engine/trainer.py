@@ -412,22 +412,21 @@ class BaseTrainer:
                 device_type = f"(ERROR Invalid device ID for device {self.args.device}. Taken 0 instead: {p.name}, {p.total_memory / (1 << 20):.0f}MiB)"
                 
         # EEHA - Store train results to a file
-        with open(Path(self.save_dir) / f'results.yaml', 'a') as file:
-            import yaml
-            yaml_data = {'train_data' : {}, 'dataset_info': {}, 'system_data' : {}}
-            yaml_data['train_data']['epoch_best_fit_index'] = self.stopper.best_epoch - 1
-            yaml_data['train_data']['best_fitness'] = self.best_fitness
-            yaml_data['train_data']['epoch_executed_index'] = self.epoch
-            yaml_data['train_data']['train_duration_h'] = float(time.time() - self.train_time_start) / 3600.0
-            yaml_data['train_data']['train_start_time'] = self.train_time_start_str
-            yaml_data['train_data']['train_end_time'] = datetime.now().isoformat()
-            yaml_data['dataset_info']['n_classes'] = len(self.data['names'])
-            yaml_data['dataset_info'] = self.data
-            yaml_data['system_data']['YOLO_v'] = __version__
-            yaml_data['system_data']['python_v'] = sys.version
-            yaml_data['system_data']['torch_v'] = str(torch.__version__)
-            yaml_data['system_data']['device_type'] = device_type
-            yaml.dump(yaml_data, file)
+        from utils import parseYaml, dumpYaml
+        yaml_data = {'train_data' : {}, 'dataset_info': {}, 'system_data' : {}}
+        yaml_data['train_data']['epoch_best_fit_index'] = self.stopper.best_epoch - 1
+        yaml_data['train_data']['best_fitness'] = self.best_fitness
+        yaml_data['train_data']['epoch_executed_index'] = self.epoch
+        yaml_data['train_data']['train_duration_h'] = float(time.time() - self.train_time_start) / 3600.0
+        yaml_data['train_data']['train_start_time'] = self.train_time_start_str
+        yaml_data['train_data']['train_end_time'] = datetime.now().isoformat()
+        yaml_data['dataset_info']['n_classes'] = len(self.data['names'])
+        yaml_data['dataset_info'] = self.data
+        yaml_data['system_data']['YOLO_v'] = __version__
+        yaml_data['system_data']['python_v'] = sys.version
+        yaml_data['system_data']['torch_v'] = str(torch.__version__)
+        yaml_data['system_data']['device_type'] = device_type
+        dumpYaml(Path(self.save_dir) / f'results.yaml', yaml_data, 'a')
 
     def save_model(self):
         """Save model checkpoints based on various conditions."""
