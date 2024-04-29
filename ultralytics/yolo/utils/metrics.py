@@ -492,6 +492,8 @@ def ap_per_class(tp,
     px, py = np.linspace(0, 1, 1000), []  # for plotting
     py_MRFFPI = []
     ap, p, r, mr, ffpi = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000))
+    confidence, fpsave, fnsave, tpsave = np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1])), , np.zeros((nc, tp.shape[1]))
+    npsave, nlsave = np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1]))
     for ci, c in enumerate(unique_classes):
         i = pred_cls == c
         n_l = nt[ci]  # number of labels
@@ -516,6 +518,13 @@ def ap_per_class(tp,
         missrate =  fnc / (n_l + eps) # missrate curve
         mr[ci] = np.interp(-px, -conf[i], missrate[:, 0], left=1) 
 
+        confidence[ci] = conf[i]
+        fpsave[ci] = fpc
+        fnsave[ci] = fnc
+        tpsave[ci] = tpc
+        npsave[ci] = n_p
+        nlsave[ci] = n_l
+
         if n_images:
             # ffpi = fp(c) / n_images
             fpcimages = fpc / n_images
@@ -529,6 +538,7 @@ def ap_per_class(tp,
 
             # MR vs FFPI plot
             if j == 0: # and plot: ## Store py values always not only when plotting
+                # Compute the mr envelope curve
                 max_mr = np.flip(np.maximum.accumulate(np.flip(mr[:, j])))
                 py_MRFFPI.append(np.interp(px, ffpi[:, j], max_mr))
 
@@ -586,12 +596,13 @@ def ap_per_class(tp,
     yaml_data[pr_tag]['names'] = names
     yaml_data[pr_tag]['px_plot'] = px.tolist()
     yaml_data[pr_tag]['py_plot'] = py if type(py) == type(list()) else py.T.tolist()
-    yaml_data[pr_tag]['mrffpi_plot'] = [array.tolist() for array in py_MRFFPI]
     yaml_data[pr_tag]['ap_plot'] = ap.tolist()
+    yaml_data[pr_tag]['mrffpi_plot'] = [array.tolist() for array in py_MRFFPI]
     yaml_data[pr_tag]['f1_plot'] = f1.tolist()
     yaml_data[pr_tag]['p_plot'] = p.tolist()
     yaml_data[pr_tag]['r_plot'] = r.tolist()
     yaml_data[pr_tag]['mr_plot'] = mr.tolist()
+    yaml_data[pr_tag]['ffpi_plot'] = ffpi.tolist()
     yaml_data[pr_tag]['p'] = p_f1max.tolist()
     yaml_data[pr_tag]['r'] = r_f1max.tolist()
     yaml_data[pr_tag]['f1'] = f1_f1max.tolist()
