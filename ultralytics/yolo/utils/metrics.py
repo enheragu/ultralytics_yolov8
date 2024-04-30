@@ -492,7 +492,7 @@ def ap_per_class(tp,
     px, py = np.linspace(0, 1, 1000), []  # for plotting
     py_MRFFPI = []
     ap, p, r, mr, ffpi = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000))
-    confidence, fpsave, fnsave, tpsave = np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1])), , np.zeros((nc, tp.shape[1]))
+    confidence, fpsave, fnsave, tpsave = np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1]))
     npsave, nlsave = np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1]))
     for ci, c in enumerate(unique_classes):
         i = pred_cls == c
@@ -518,12 +518,12 @@ def ap_per_class(tp,
         missrate =  fnc / (n_l + eps) # missrate curve
         mr[ci] = np.interp(-px, -conf[i], missrate[:, 0], left=1) 
 
-        confidence[ci] = conf[i]
-        fpsave[ci] = fpc
-        fnsave[ci] = fnc
-        tpsave[ci] = tpc
-        npsave[ci] = n_p
-        nlsave[ci] = n_l
+        # confidence[ci] = conf[i]
+        # fpsave[ci] = fpc
+        # fnsave[ci] = fnc
+        # tpsave[ci] = tpc
+        # npsave[ci] = n_p
+        # nlsave[ci] = n_l
 
         if n_images:
             # ffpi = fp(c) / n_images
