@@ -287,16 +287,22 @@ class ConfusionMatrix:
                 if not any(m1 == i):
                     self.matrix[dc, self.nc] += 1  # predicted background
 
-    def matrix(self):
+    ## EEHA matrix is overriten by class member?¿
+    def get_matrix(self):
         """Returns the confusion matrix."""
         return self.matrix
 
-    def tp_fp(self):
+    ## EEHA add all other metrics to function
+    def tp_fp_fn_tn(self):
         """Returns true positives and false positives."""
         tp = self.matrix.diagonal()  # true positives
-        fp = self.matrix.sum(1) - tp  # false positives
-        # fn = self.matrix.sum(0) - tp  # false negatives (missed detections)
-        return (tp[:-1], fp[:-1]) if self.task == 'detect' else (tp, fp)  # remove background class if task=detect
+        fp = self.matrix.sum(axis=0) - tp  # false positives
+        fn = self.matrix.sum(axis=1) - tp  # false negatives (missed detections)
+        total = self.matrix.sum()
+        tn = total - (tp + fp + fn) # True Negatives
+
+        # remove background class if task=detect
+        return (tp[:-1], fp[:-1], fn[:-1], tn[:-1]) if self.task == 'detect' else (tp, fp, fn, tn)  
 
     @TryExcept('WARNING ⚠️ ConfusionMatrix plot failure')
     @plt_settings()
@@ -442,6 +448,28 @@ def compute_ap(recall, precision):
     return ap, mpre, mrec
 
 
+# Version from https://github.com/Tencent/ObjectDetection-OneStageDet/blob/master/brambox/boxes/statistics/mr_fppi.py
+def compute_lamr(miss_rate, fppi, num_of_samples=9):
+    import scipy.interpolate  
+    """ Compute the log average miss-rate from a given MR-FPPI curve.
+    The log average miss-rate is defined as the average of a number of evenly spaced log miss-rate samples
+    on the :math:`{log}(FPPI)` axis within the range :math:`[10^{-2}, 10^{0}]`
+
+    Args:
+        miss_rate (list): miss-rate values
+        fppi (list): FPPI values
+        num_of_samples (int, optional): Number of samples to take from the curve to measure the average precision; Default **9**
+
+    Returns:
+        Number: log average miss-rate
+    """
+    samples = np.logspace(-2., 0., num_of_samples)
+    interpolated = scipy.interpolate.interp1d(fppi, miss_rate, fill_value=(1., 0.), bounds_error=False)(samples)
+    log_interpolated = np.log(np.maximum(1e-10, interpolated))
+    lamr = np.exp(np.mean(log_interpolated))
+
+    return lamr
+
 def ap_per_class(tp,
                  conf,
                  pred_cls,
@@ -487,13 +515,18 @@ def ap_per_class(tp,
     # Find unique classes
     unique_classes, nt = np.unique(target_cls, return_counts=True)
     nc = unique_classes.shape[0]  # number of classes, number of detections
-
+    
+    names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
+    names = dict(enumerate(names))  # to dict
+    
     # Create Precision-Recall curve and compute AP for each class
     px, py = np.linspace(0, 1, 1000), []  # for plotting
-    py_MRFFPI = []
-    ap, p, r, mr, ffpi = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000))
-    confidence, fpsave, fnsave, tpsave = np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1]))
-    npsave, nlsave = np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1]))
+    py_MRFPPI = np.zeros((nc, tp.shape[1]))
+    ap, p, r, mr, fppi = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000))
+    # confidence = np.zeros(conf.shape)
+    # fpsave, fnsave, tpsave = np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1]))
+    # npsave, nlsave = np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1]))
+    data_store = {}
     for ci, c in enumerate(unique_classes):
         i = pred_cls == c
         n_l = nt[ci]  # number of labels
@@ -503,8 +536,8 @@ def ap_per_class(tp,
 
         # Accumulate FPs and TPs
         fpc = (1 - tp[i]).cumsum(0)
-        fnc = (1 - np.invert(tp[i])).cumsum(0)
         tpc = tp[i].cumsum(0)
+        fnc = n_l - tpc
 
         # Recall
         recall = tpc / (n_l + eps)  # recall curve
@@ -518,17 +551,17 @@ def ap_per_class(tp,
         missrate =  fnc / (n_l + eps) # missrate curve
         mr[ci] = np.interp(-px, -conf[i], missrate[:, 0], left=1) 
 
-        # confidence[ci] = conf[i]
-        # fpsave[ci] = fpc
-        # fnsave[ci] = fnc
-        # tpsave[ci] = tpc
-        # npsave[ci] = n_p
-        # nlsave[ci] = n_l
 
+        data_store[names[int(ci)]] = {
+                            'conf': (-conf[i]).tolist(),
+                            'tpsave': tp[i][:, 0].tolist(),
+                            'number_predictions': n_p.tolist(),
+                            'number_labels': n_l.tolist()}
+        
         if n_images:
-            # ffpi = fp(c) / n_images
+            # fppi = fp(c) / n_images
             fpcimages = fpc / n_images
-            ffpi[ci] = np.interp(-px, -conf[i], fpcimages[:, 0], left=1) 
+            fppi[ci] = np.interp(-px, -conf[i], fpcimages[:, 0], left=1) 
 
         # AP from recall-precision curve
         for j in range(tp.shape[1]):
@@ -536,32 +569,16 @@ def ap_per_class(tp,
             if j == 0: # and plot: ## Store py values always not only when plotting
                 py.append(np.interp(px, mrec, mpre))  # precision at mAP@0.5
 
-            # MR vs FFPI plot
+            # MR vs FPPI plot
             if j == 0: # and plot: ## Store py values always not only when plotting
                 # Compute the mr envelope curve
                 max_mr = np.flip(np.maximum.accumulate(np.flip(mr[:, j])))
-                py_MRFFPI.append(np.interp(px, ffpi[:, j], max_mr))
+                # py_MRFPPI[ci,j].append(np.interp(px, fppi[:, j], max_mr))
 
-
-    log_ffpi_reference = np.logspace(np.log10(min(ffpi)), np.log10(max(ffpi)), num=9)
-    def calculate_lamr_log_scale(recall, missrate, fp_reference_points_log):
-        lamr_sum = np.sum(fp_reference_points_log * np.log(missrate))
-        lamr_avg = np.exp(1 / len(fp_reference_points_log) * lamr_sum)
-        return lamr_avg
-
-    lamr_classes_log_scale = []
-    for ci in range(nc):
-        lamr_log_scale = calculate_lamr_log_scale(r[ci], mr[ci], log_ffpi_reference)
-        lamr_classes_log_scale.append(lamr_log_scale)
-
-    lamr_average_log_scale = np.mean(lamr_classes_log_scale)
-
-
+    lamr = [compute_lamr(mr.flatten(), fppi.flatten())]
 
     # Compute F1 (harmonic mean of precision and recall)
     f1 = 2 * p * r / (p + r + eps)
-    names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
-    names = dict(enumerate(names))  # to dict
     py = np.stack(py, axis=1) # previously inside plot_pr_curve. Caused access issues with logging. Even when no plotting, store py
     if plot:
         try:
@@ -570,14 +587,14 @@ def ap_per_class(tp,
             plot_mc_curve(px, p, save_dir / f'{prefix}P_curve.png', names, ylabel='Precision', on_plot=on_plot)
             plot_mc_curve(px, r, save_dir / f'{prefix}R_curve.png', names, ylabel='Recall', on_plot=on_plot)
             plot_mc_curve(px, mr, save_dir / f'{prefix}MR_curve.png', names, ylabel='MissRate', on_plot=on_plot)
-            plot_mc_curve(px, py_MRFFPI, save_dir / f'{prefix}MR_FFPI_curve.png', names, xlabel='FFPI', ylabel='MissRate', on_plot=on_plot)
+            plot_mc_curve(px, py_MRFPPI, save_dir / f'{prefix}MR_FPPI_curve.png', names, xlabel='FPPI', ylabel='MissRate', on_plot=on_plot)
         except Exception as exc:
             with open(Path(save_dir) / f'PLOTTING_EXCEPTION.txt', 'a') as file:
                 str_store = f"Catched exception while plotting execution graphs, store excetion in file. Exception was:\n{exc}"
                 file.write(str_store)
 
     i = smooth(f1.mean(0), 0.1).argmax()  # max F1 index
-    p_f1max, r_f1max, f1_f1max, mr_f1max = p[:, i], r[:, i], f1[:, i], mr[:, i]
+    p_f1max, r_f1max, f1_f1max, mr_f1max, fppi_f1max = p[:, i], r[:, i], f1[:, i], mr[:, i], fppi[:, i]
     tp = (r_f1max * nt).round()  # true positives
     fp = (tp / (p_f1max + eps) - tp).round()  # false positives
     
@@ -597,20 +614,24 @@ def ap_per_class(tp,
     yaml_data[pr_tag]['px_plot'] = px.tolist()
     yaml_data[pr_tag]['py_plot'] = py if type(py) == type(list()) else py.T.tolist()
     yaml_data[pr_tag]['ap_plot'] = ap.tolist()
-    yaml_data[pr_tag]['mrffpi_plot'] = [array.tolist() for array in py_MRFFPI]
+    yaml_data[pr_tag]['mrfppi_plot'] = [array.tolist() for array in py_MRFPPI]
     yaml_data[pr_tag]['f1_plot'] = f1.tolist()
     yaml_data[pr_tag]['p_plot'] = p.tolist()
     yaml_data[pr_tag]['r_plot'] = r.tolist()
     yaml_data[pr_tag]['mr_plot'] = mr.tolist()
-    yaml_data[pr_tag]['ffpi_plot'] = ffpi.tolist()
+    yaml_data[pr_tag]['fppi_plot'] = fppi.tolist()
     yaml_data[pr_tag]['p'] = p_f1max.tolist()
     yaml_data[pr_tag]['r'] = r_f1max.tolist()
     yaml_data[pr_tag]['f1'] = f1_f1max.tolist()
     yaml_data[pr_tag]['mr'] = mr_f1max.tolist()
-    yaml_data[pr_tag]['lamr'] = lamr_average_log_scale.tolist()
+    yaml_data[pr_tag]['fppi'] = fppi_f1max.tolist()
+    yaml_data[pr_tag]['lamr'] = lamr.tolist()
     yaml_data[pr_tag]['max_f1_index'] = i.item()
     yaml_data[pr_tag]['true_positives'] = tp.tolist()
     yaml_data[pr_tag]['false_positives'] = fp.tolist()
+
+    yaml_data[pr_tag]['data_store'] = data_store
+
     yaml_data["pr_epoch"] = iter + 1
     dumpYaml(Path(save_dir) / f'results.yaml', yaml_data)
 

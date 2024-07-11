@@ -125,7 +125,7 @@ class DetectionValidator(BaseValidator):
         """Returns metrics statistics and results dictionary."""
         stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*self.stats)]  # to numpy
         if len(stats) and stats[0].any():
-            ## EEHA NEEDS NUM OF IMAGES TO COMPUTE ffpi. Little hack sorryn't. TBD better
+            ## EEHA NEEDS NUM OF IMAGES TO COMPUTE fppi. Little hack sorryn't. TBD better
             self.metrics.process(*stats, self.seen)
         self.nt_per_class = np.bincount(stats[-1].astype(int), minlength=self.nc)  # number of targets per class
         return self.metrics.results_dict
@@ -166,6 +166,13 @@ class DetectionValidator(BaseValidator):
         yaml_data[val_tag]['test'] = str(self.save_dir)
         yaml_data[val_tag]['model'] = str(self.args.model)
         yaml_data[val_tag]['name'] = str(self.args.name)
+        yaml_data[val_tag]['confusion_matrix'] = self.confusion_matrix.matrix.tolist()
+        yaml_data[val_tag]['conf'] = self.confusion_matrix.conf
+        yaml_data[val_tag]['iou_thres'] = self.confusion_matrix.iou_thres
+        yaml_data[val_tag]['tp_fp_fn_tn'] = [self.confusion_matrix.tp_fp_fn_tn()[0].tolist()[0],
+                                             self.confusion_matrix.tp_fp_fn_tn()[1].tolist()[0],
+                                             self.confusion_matrix.tp_fp_fn_tn()[2].tolist()[0],
+                                             self.confusion_matrix.tp_fp_fn_tn()[3].tolist()[0]]
 
         mp, mr, map50, map_data = self.metrics.mean_results()
         yaml_data[val_tag]['data'] = {'all': {'Images': int(self.seen), 'Instances': int(self.nt_per_class.sum()), 
