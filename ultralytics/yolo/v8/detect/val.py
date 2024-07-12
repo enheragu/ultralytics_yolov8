@@ -151,16 +151,16 @@ class DetectionValidator(BaseValidator):
                                            on_plot=self.on_plot)
         
         # EEHA -- Store all results to a file
+        from utils import parseYaml, dumpYaml
         if Path(str(self.save_dir)+'/results.yaml').exists():
-            from utils import parseYaml, dumpYaml
             yaml_data = parseYaml(Path(self.save_dir) / f'results.yaml')
             iter = 0 if not "val_epoch" in yaml_data else yaml_data["val_epoch"]
         else:
             yaml_data = {}
             iter = 0
 
-        # import yaml
-        from utils import parseYaml, dumpYaml
+        iter = 0 # Overwrites, only stores last one which is the one of validation whit best model. Saving all increases a lot the size of data
+        
         val_tag = f'validation_{iter}'
         yaml_data[val_tag] = {}
         yaml_data[val_tag]['test'] = str(self.save_dir)

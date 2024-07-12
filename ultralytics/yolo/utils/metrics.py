@@ -521,7 +521,7 @@ def ap_per_class(tp,
     
     # Create Precision-Recall curve and compute AP for each class
     px, py = np.linspace(0, 1, 1000), []  # for plotting
-    py_MRFPPI = np.zeros((nc, tp.shape[1]))
+    py_MRFPPI = []
     ap, p, r, mr, fppi = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000))
     # confidence = np.zeros(conf.shape)
     # fpsave, fnsave, tpsave = np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1]))
@@ -549,11 +549,11 @@ def ap_per_class(tp,
 
         # missrate = fn(c) / tp(c) + fn(c) = fn(c) / all ground truth
         missrate =  fnc / (n_l + eps) # missrate curve
-        mr[ci] = np.interp(-px, -conf[i], missrate[:, 0], left=1) 
+        mr[ci] = np.interp(px, conf[i], missrate[:, 0], left=1)  # Positive, mr is already decreasing
 
 
         data_store[names[int(ci)]] = {
-                            'conf': (-conf[i]).tolist(),
+                            'conf': (conf[i]).tolist(),
                             'tpsave': tp[i][:, 0].tolist(),
                             'number_predictions': n_p.tolist(),
                             'number_labels': n_l.tolist()}
@@ -561,7 +561,7 @@ def ap_per_class(tp,
         if n_images:
             # fppi = fp(c) / n_images
             fpcimages = fpc / n_images
-            fppi[ci] = np.interp(-px, -conf[i], fpcimages[:, 0], left=1) 
+            fppi[ci] = np.interp(px, conf[i], fpcimages[:, 0], left=1)  # Positive, fppi is already decreasing
 
         # AP from recall-precision curve
         for j in range(tp.shape[1]):
@@ -572,10 +572,11 @@ def ap_per_class(tp,
             # MR vs FPPI plot
             if j == 0: # and plot: ## Store py values always not only when plotting
                 # Compute the mr envelope curve
-                max_mr = np.flip(np.maximum.accumulate(np.flip(mr[:, j])))
+                max_mr = np.flip(np.maximum.accumulate(np.flip(missrate[:, j])))
                 # py_MRFPPI[ci,j].append(np.interp(px, fppi[:, j], max_mr))
+                py_MRFPPI.append(np.interp(px, fppi[:, j], max_mr))
 
-    lamr = [compute_lamr(mr.flatten(), fppi.flatten())]
+    lamr = compute_lamr(mr.flatten(), fppi.flatten())
 
     # Compute F1 (harmonic mean of precision and recall)
     f1 = 2 * p * r / (p + r + eps)
@@ -599,19 +600,20 @@ def ap_per_class(tp,
     fp = (tp / (p_f1max + eps) - tp).round()  # false positives
     
     # EEHA - Store aldetailed results to a file
+    from utils import parseYaml, dumpYaml
     if Path(str(save_dir)+'/results.yaml').exists():
-        from utils import parseYaml, dumpYaml
         yaml_data = parseYaml(Path(save_dir) / f'results.yaml')
         iter = 0 if not "pr_epoch" in yaml_data else yaml_data["pr_epoch"]
     else:
         yaml_data = {}
         iter = 0
+    
+    iter = 0 # Overwrites, only stores last one which is the one of validation whit best model. Saving all increases a lot the size of data
 
-    from utils import parseYaml, dumpYaml
     pr_tag = f'pr_data_{iter}'
     yaml_data[pr_tag] = {}
     yaml_data[pr_tag]['names'] = names
-    yaml_data[pr_tag]['px_plot'] = px.tolist()
+    # yaml_data[pr_tag]['px_plot'] = px.tolist()
     yaml_data[pr_tag]['py_plot'] = py if type(py) == type(list()) else py.T.tolist()
     yaml_data[pr_tag]['ap_plot'] = ap.tolist()
     yaml_data[pr_tag]['mrfppi_plot'] = [array.tolist() for array in py_MRFPPI]
@@ -625,12 +627,14 @@ def ap_per_class(tp,
     yaml_data[pr_tag]['f1'] = f1_f1max.tolist()
     yaml_data[pr_tag]['mr'] = mr_f1max.tolist()
     yaml_data[pr_tag]['fppi'] = fppi_f1max.tolist()
-    yaml_data[pr_tag]['lamr'] = lamr.tolist()
+    yaml_data[pr_tag]['lamr'] = [lamr.tolist()]
     yaml_data[pr_tag]['max_f1_index'] = i.item()
     yaml_data[pr_tag]['true_positives'] = tp.tolist()
     yaml_data[pr_tag]['false_positives'] = fp.tolist()
 
-    yaml_data[pr_tag]['data_store'] = data_store
+    # not worth, conf and tp can get up to 30k
+    # Processed data is more compressed as it is now
+    # yaml_data[pr_tag]['data_store'] = data_store
 
     yaml_data["pr_epoch"] = iter + 1
     dumpYaml(Path(save_dir) / f'results.yaml', yaml_data)
