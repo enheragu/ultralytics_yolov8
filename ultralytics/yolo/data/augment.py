@@ -492,7 +492,26 @@ class RandomHSV:
         """Applies random horizontal or vertical flip to an image with a given probability."""
         img = labels['img']
         channels = 1 if len(img.shape) == 2 else img.shape[2] # EEHA: One channel image has no extra dimmension
-        if channels == 3: # NEEDS 3 CHANNELS FOR THIS TRANSFORMATIONS
+
+        if channels == 4: ## EEHA Augmentation with HSV for four channel images
+            if self.hgain or self.sgain or self.vgain:
+                r = np.random.uniform(-1, 1, 4) * [self.hgain, self.sgain, self.vgain, self.vgain] + 1  # rando gains
+                first_three_channels = img[:, :, :3]
+                thch = img[:, :, 3]
+                hue, sat, val = cv2.split(cv2.cvtColor(first_three_channels, cv2.COLOR_BGR2HSV)) # Get first 3 channels
+                dtype = img.dtype
+
+                x = np.arange(0, 256, dtype=r.dtype)
+                lut_hue = ((x * r[0]) % 180).astype(dtype)
+                lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
+                lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
+                lut_thch = np.clip(x * r[3], 0, 255).astype(dtype)
+
+                im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
+                h,s,v = cv2.split(cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR))
+                img = cv2.merge((h,s,v,cv2.LUT(thch, lut_thch)))
+                
+        elif channels == 3: # NEEDS 3 CHANNELS FOR THIS TRANSFORMATIONS
             if self.hgain or self.sgain or self.vgain:
                 r = np.random.uniform(-1, 1, 3) * [self.hgain, self.sgain, self.vgain] + 1  # random gains
                 hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
@@ -516,7 +535,6 @@ class RandomHSV:
                 lut_grey = np.clip(x * r[0], 0, 255).astype(dtype)
 
                 img = cv2.LUT(grey, lut_grey) # no return needed
-
         else:
             if self.hgain or self.sgain or self.vgain:
                 r = np.random.uniform(-0.5, 0.5, channels) + 1  # random gains

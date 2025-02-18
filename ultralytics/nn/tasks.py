@@ -643,7 +643,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             if m is HGBlock:
                 args.insert(4, n)  # number of repeats
                 n = 1
-
+        elif m is nn.Dropout: ## EEHA add dropout to yaml parser
+            m_ = nn.Dropout(*args)
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:
@@ -655,7 +656,10 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         else:
             c2 = ch[f]
 
-        m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
+        # m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
+        ## EEHA use dropout layer or the regular one created
+        m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else (m_ if m is nn.Dropout else m(*args))
+
         t = str(m)[8:-2].replace('__main__.', '')  # module type
         m.np = sum(x.numel() for x in m_.parameters())  # number params
         m_.i, m_.f, m_.type = i, f, t  # attach index, 'from' index, type
@@ -666,6 +670,10 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         if i == 0:
             ch = []
         ch.append(c2)
+
+        if m is nn.Dropout:
+            m_ = nn.Dropout(*args)
+
     return nn.Sequential(*layers), sorted(save)
 
 

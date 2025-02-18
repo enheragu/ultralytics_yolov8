@@ -554,9 +554,10 @@ def ap_per_class(tp,
 
         data_store[names[int(ci)]] = {
                             'conf': (conf[i]).tolist(),
-                            'tpsave': tp[i][:, 0].tolist(),
+                            'tp': tp[i][:, 0].tolist(),
                             'number_predictions': n_p.tolist(),
-                            'number_labels': n_l.tolist()}
+                            'number_labels': n_l.tolist(),
+                            'n_images': n_images}
         
         if n_images:
             # fppi = fp(c) / n_images
@@ -572,7 +573,7 @@ def ap_per_class(tp,
             # MR vs FPPI plot
             if j == 0: # and plot: ## Store py values always not only when plotting
                 # Compute the mr envelope curve
-                max_mr = np.flip(np.maximum.accumulate(np.flip(missrate[:, j])))
+                max_mr = np.flip(np.maximum.accumulate(np.flip(mr[:, j])))
                 # py_MRFPPI[ci,j].append(np.interp(px, fppi[:, j], max_mr))
                 py_MRFPPI.append(np.interp(px, fppi[:, j], max_mr))
 
@@ -632,10 +633,7 @@ def ap_per_class(tp,
     yaml_data[pr_tag]['true_positives'] = tp.tolist()
     yaml_data[pr_tag]['false_positives'] = fp.tolist()
 
-    # not worth, conf and tp can get up to 30k
-    # Processed data is more compressed as it is now
-    # yaml_data[pr_tag]['data_store'] = data_store
-
+    yaml_data[pr_tag]['data_store'] = data_store  # It can get quite big :)
     yaml_data["pr_epoch"] = iter + 1
     dumpYaml(Path(save_dir) / f'results.yaml', yaml_data)
 

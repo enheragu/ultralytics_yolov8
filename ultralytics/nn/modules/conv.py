@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-__all__ = ('Conv', 'LightConv', 'DWConv', 'DWConvTranspose2d', 'ConvTranspose', 'Focus', 'GhostConv',
+__all__ = ('Conv', 'Conv3', 'LightConv', 'DWConv', 'DWConvTranspose2d', 'ConvTranspose', 'Focus', 'GhostConv',
            'ChannelAttention', 'SpatialAttention', 'CBAM', 'Concat', 'RepConv')
 
 
@@ -78,6 +78,26 @@ class LightConv(nn.Module):
         """Apply 2 convolutions to input tensor."""
         return self.conv2(self.conv1(x))
 
+
+class Conv3(nn.Module):
+    """Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)."""
+    default_act = nn.SiLU()  # default activation
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+        """Initialize Conv layer with given arguments including activation."""
+        super().__init__()
+        self.conv3 = nn.Conv3d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+        self.bn = nn.BatchNorm3d(c2)
+        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+
+    def forward(self, x):
+        """Apply convolution, batch normalization and activation to input tensor."""
+        return self.act(self.bn(self.conv3(x)))
+
+    def forward_fuse(self, x):
+        """Perform transposed convolution of 2D data."""
+        return self.act(self.conv3(x))
+    
 
 class DWConv(Conv):
     """Depth-wise convolution."""
