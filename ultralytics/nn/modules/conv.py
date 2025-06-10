@@ -315,3 +315,48 @@ class Concat(nn.Module):
     def forward(self, x):
         """Forward pass for the YOLOv8 mask Proto module."""
         return torch.cat(x, self.d)
+
+
+class FilterInput(nn.Module):    
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+        """
+        channels: list of index from channels that will be kept (for example: [0,1,2])
+        """
+        # Take into account different cases: [0,1,2], [(0,1,2)], [[0,1,2]]
+        channels = None
+        if args:
+            if len(args) == 1 and isinstance(args[0], (list, tuple)):
+                channels = list(args[0])
+            else:
+                channels = list(args)
+        else:
+            channels = kwargs.get('channels', None)
+        if channels is None:
+            raise ValueError("FilterInput requires 'channels' argument to specify which channels to keep.")
+        self.channels = channels
+
+    def forward(self, x):
+        # Just channels selected
+        # print(f"FilterInput: Keeping channels {self.channels} from input with shape {x.shape}")
+        # return x
+        # print(f"FilterInput: Keeping channels {self.channels} from input with shape {x.shape}")
+        new_x = x[:, self.channels, ...]
+        # print(f"FilterInput: New shape after filtering {new_x.shape}")
+        return new_x
+
+class FilterInputDetach(FilterInput):
+    def __init__(self, channels):
+        super().__init__()
+
+    def forward(self, inputs):
+        # inputs: list [layer to base filter decision, layer to be outputed based on decision]
+        filter_input, rama_input = inputs
+        selected = filter_input[:, self.channels, ...]
+        
+        # If all inputs from decision layer are 0, detach :)
+        if torch.all(selected == 0):
+            return rama_input.detach()
+        else:
+            return rama_input

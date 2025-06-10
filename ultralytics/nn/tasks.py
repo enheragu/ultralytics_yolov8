@@ -10,7 +10,7 @@ import torch.nn as nn
 from ultralytics.nn.modules import (AIFI, C1, C2, C3, C3TR, SPP, SPPF, Bottleneck, BottleneckCSP, C2f, C3Ghost, C3x,
                                     Classify, Concat, Conv, Conv2, ConvTranspose, Detect, DWConv, DWConvTranspose2d,
                                     Focus, GhostBottleneck, GhostConv, HGBlock, HGStem, Pose, RepC3, RepConv,
-                                    RTDETRDecoder, Segment)
+                                    RTDETRDecoder, Segment, FilterInput)
 from ultralytics.yolo.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.yolo.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.yolo.utils.loss import v8ClassificationLoss, v8DetectionLoss, v8PoseLoss, v8SegmentationLoss
@@ -79,7 +79,21 @@ class BaseModel(nn.Module):
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
             if profile:
                 self._profile_one_layer(m, x, dt)
-            x = m(x)  # run
+            try:
+                x = m(x)  # run
+            except Exception as e:
+                ## EEHA Debug tensor size exception in forward pass
+                print(f"Error in layer {m.i}: {m.__class__.__name__} ")
+                print(f"{type(e).__name__}: {str(e)}")
+                if isinstance(x, (list, tuple)):
+                    print(f"Input shape: {[t.shape if isinstance(t, torch.Tensor) else type(t) for t in x]}")
+                else:
+                    print(f"Input shape: {x.shape if isinstance(x, torch.Tensor) else type(x)}")
+                print(f"Layer params: {m}")
+                print(f"Traceback:")
+                import traceback
+                traceback.print_exc()
+                raise e
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
                 feature_visualization(x, m.type, m.i, save_dir=visualize)
@@ -594,6 +608,7 @@ def attempt_load_one_weight(weight, device=None, inplace=True, fuse=False):
 
 
 def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
+    verbose = True
     # Parse a YOLO model.yaml dictionary into a PyTorch model
     import ast
 
@@ -645,6 +660,11 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 n = 1
         elif m is nn.Dropout: ## EEHA add dropout to yaml parser
             m_ = nn.Dropout(*args)
+        elif m is nn.Identity: ## EEHA add identity to yaml parser
+            m_ = nn.Identity()
+        elif m is FilterInput: ## EEHA add FilterInput to yaml parser
+            m_ = FilterInput(*args)
+            c2 = len(m_.channels)
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:
