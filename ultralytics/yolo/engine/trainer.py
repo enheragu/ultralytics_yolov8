@@ -141,7 +141,7 @@ class BaseTrainer:
         self.tloss = None
         self.loss_names = ['Loss']
         self.csv = self.save_dir / 'results.csv'
-        self.plot_idx = [0, 1, 2]
+        self.plot_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] ## EEHA - Added from 3 onwards to plot extra
 
         # Callbacks
         self.callbacks = _callbacks or callbacks.get_default_callbacks()
@@ -289,7 +289,63 @@ class BaseTrainer:
             base_idx = (self.epochs - self.args.close_mosaic) * nb
             self.plot_idx.extend([base_idx, base_idx + 1, base_idx + 2])
         epoch = self.epochs  # predefine for resume fully trained model edge cases
+
+
+        ## EEHA - Store params function :)
+        from utils import parseYaml, dumpYaml
+        import math
+        def store_params(model):
+            params = {}
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    params[name] = param.grad.abs().mean().item()
+                else:
+                    params[name] = math.nan
+                    print(f"Parameter {name} has no gradient, storing NaN :)")
+            return params
+    
+        # EEHA - Accumulate gradients during whole epoch
+        if self.args.plots:
+            gradients_output_path = Path(self.save_dir / 'gradients/raw_data')
+            gradients_output_path.mkdir(parents=True, exist_ok=True)
+                    
+        epoch_accum_grads = None
+        train_accum_grads = None
+        def accumulateGrads(grads_accum, grads_new):
+            if grads_accum is None:
+                return grads_new.copy()
+            grads_out = grads_accum.copy()
+            for k in grads_new:
+                grads_out[k] = grads_accum.get(k, 0.0) + grads_new[k]
+            return grads_out
+        
+        def accumulateGradsList(grads_accum, grads_new):
+            grads_out = grads_accum.copy() if grads_accum else {}
+            if grads_accum is None:
+                grads_out = {k: [v] for k, v in grads_new.items()}
+            else:
+                for k, v in grads_new.items():
+                    if k in grads_accum:
+                        grads_out[k].append(v)
+                    else:
+                        grads_out[k] = [v]
+            return grads_out
+        
+        def accumulateGradsListIdx(grads_accum, idx, mode='sum'):
+            grads_out = {}
+            for k, v_list in grads_accum.items():
+                subset = v_list[:idx+1]
+                if mode == 'sum':
+                    grads_out[k] = sum(subset)
+                elif mode == 'mean':
+                    grads_out[k] = sum(subset) / len(subset) if subset else 0.0
+                else:
+                    raise ValueError("mode debe ser 'sum' o 'mean'")
+            return grads_out
+        
         for epoch in range(self.start_epoch, self.epochs):
+            epoch_accum_grads = None
+               
             self.epoch = epoch
             self.run_callbacks('on_train_epoch_start')
             self.model.train()
@@ -310,6 +366,7 @@ class BaseTrainer:
                 pbar = tqdm(enumerate(self.train_loader), total=nb, bar_format=TQDM_BAR_FORMAT)
             self.tloss = None
             self.optimizer.zero_grad()
+
             for i, batch in pbar:
                 self.run_callbacks('on_train_batch_start')
                 # Warmup
@@ -332,10 +389,18 @@ class BaseTrainer:
                         self.loss *= world_size
                     self.tloss = (self.tloss * i + self.loss_items) / (i + 1) if self.tloss is not None \
                         else self.loss_items
-
+                                
                 # Backward
                 self.scaler.scale(self.loss).backward()
-
+    
+                ## EEHA - Plot the graph of the backpropagation result of the model
+                store_indexes = np.linspace(0, nb - 1, 15, dtype=int) # Store 15 first batches per epoch distributed evenly
+                if self.args.plots and i in store_indexes:
+                    batch_grads = store_params(self.model)
+                    epoch_accum_grads = accumulateGrads(epoch_accum_grads, batch_grads)
+                    output_file = gradients_output_path / f'graph_epoch_{epoch}_batch{i}.yaml'
+                    dumpYaml(output_file, batch_grads, 'a')
+                    
                 # Optimize - https://pytorch.org/docs/master/notes/amp_examples.html
                 if ni - last_opt_step >= self.accumulate:
                     self.optimizer_step()
@@ -354,6 +419,7 @@ class BaseTrainer:
                         self.plot_training_samples(batch, ni)
 
                 self.run_callbacks('on_train_batch_end')
+        
 
             self.lr = {f'lr/pg{ir}': x['lr'] for ir, x in enumerate(self.optimizer.param_groups)}  # for loggers
 
@@ -381,6 +447,12 @@ class BaseTrainer:
             self.epoch_time_start = tnow
             self.run_callbacks('on_fit_epoch_end')
             torch.cuda.empty_cache()  # clears GPU vRAM at end of epoch, can help with out of memory errors
+
+            ## EEHHA - Store epoch gradient
+            if self.args.plots:
+                train_accum_grads = accumulateGradsList(train_accum_grads, epoch_accum_grads)
+                output_file = gradients_output_path / f'graph_epoch_{epoch}.yaml'
+                dumpYaml(output_file, epoch_accum_grads, 'a')
 
             # Early Stopping
             if RANK != -1:  # if DDP training
@@ -410,11 +482,18 @@ class BaseTrainer:
             except:
                 p = torch.cuda.get_device_properties(0)
                 device_type = f"(ERROR Invalid device ID for device {self.args.device}. Taken 0 instead: {p.name}, {p.total_memory / (1 << 20):.0f}MiB)"
-                
+        
+
+        ## EEHHA - Store epoch gradient
+        epoch_best_fit_index = self.stopper.best_epoch - 1 if self.stopper.best_epoch > 0 else 0
+        if self.args.plots:
+            train_accum_grads = accumulateGradsListIdx(train_accum_grads, epoch_best_fit_index)
+            output_file = gradients_output_path / f'graph_whole_train.yaml'
+            dumpYaml(output_file, train_accum_grads, 'a')
+
         # EEHA - Store train results to a file
-        from utils import parseYaml, dumpYaml
         yaml_data = {'train_data' : {}, 'dataset_info': {}, 'system_data' : {}}
-        yaml_data['train_data']['epoch_best_fit_index'] = self.stopper.best_epoch - 1
+        yaml_data['train_data']['epoch_best_fit_index'] = epoch_best_fit_index
         yaml_data['train_data']['best_fitness'] = self.best_fitness
         yaml_data['train_data']['epoch_executed_index'] = self.epoch
         yaml_data['train_data']['train_duration_h'] = float(time.time() - self.train_time_start) / 3600.0

@@ -116,7 +116,14 @@ class BasePredictor:
         """
         if not isinstance(im, torch.Tensor):
             im = np.stack(self.pre_transform(im))
-            im = im[..., ::-1].transpose((0, 3, 1, 2))  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
+            ## EEHA - Take care of four cahnnel imsages, BGRT to RGBT and BHWC to BCHW
+            if im.shape[-1] == 4:
+                color = im[..., :3][..., ::-1]  # BGR to RGB
+                thermal = im[..., 3:]
+                im = np.concatenate([color, thermal], axis=-1)
+                im = im.transpose((0, 3, 1, 2)) # BHWC a BCHW
+            else:
+                im = im[..., ::-1].transpose((0, 3, 1, 2))  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
             im = np.ascontiguousarray(im)  # contiguous
             im = torch.from_numpy(im)
         # NOTE: assuming im with (b, 3, h, w) if it's a tensor

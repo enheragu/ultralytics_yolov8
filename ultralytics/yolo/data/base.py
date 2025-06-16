@@ -71,7 +71,7 @@ class BaseDataset(Dataset):
         self.single_cls = single_cls
         self.prefix = prefix
         self.fraction = fraction
-        self.im_files = self.get_img_files(self.img_path)
+        self.im_files, self.im_files_folder = self.get_img_files(self.img_path)        
         self.labels = self.get_labels()
         self.update_labels(include_class=classes)  # single_cls and include_class
         self.ni = len(self.labels)  # number of images
@@ -123,7 +123,22 @@ class BaseDataset(Dataset):
             raise FileNotFoundError(f'{self.prefix}Error loading data from {img_path}\n{HELP_URL}') from e
         if self.fraction < 1:
             im_files = im_files[:round(len(im_files) * self.fraction)]
-        return im_files
+
+        # Group images by configured folder
+        from collections import defaultdict # automatcally creates key when accessed if it does not exist :)
+        im_files_folder = {}
+        img_path_list = img_path if isinstance(img_path, list) else [img_path]
+        img_path_list = [str(Path(p).resolve()) for p in img_path_list]
+        
+        im_files_folder = defaultdict(list)
+        for file_idx, file_path in enumerate(im_files):
+            file_path_abs = str(Path(file_path).resolve())
+            for base_path in img_path_list:
+                if file_path_abs.startswith(base_path):
+                    im_files_folder[base_path].append(file_idx)
+                    break
+
+        return im_files, im_files_folder
 
     def update_labels(self, include_class: Optional[list]):
         """include_class, filter labels to include only these classes (optional)."""

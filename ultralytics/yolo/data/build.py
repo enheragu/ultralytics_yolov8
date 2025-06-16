@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import dataloader, distributed
+from torch.utils.data import BatchSampler
 
 from ultralytics.yolo.data.dataloaders.stream_loaders import (LOADERS, LoadImages, LoadPilAndNumpy, LoadScreenshots,
                                                               LoadStreams, LoadTensor, SourceTypes, autocast_list)
@@ -91,8 +92,36 @@ def build_yolo_dataset(cfg, img_path, batch, data, mode='train', rect=False, str
         fraction=cfg.fraction if mode == 'train' else 1.0,
         ch = ch)
 
+## EEHA - Custom batch sampler: generates batches based on folder indices so that images
+#         from different folders are not mixed in the same batch. Then batches are shuffled.
+class FolderBatchSampler(BatchSampler):
+    def __init__(self, folder_indices, batch_size, shuffle_batches=True, drop_last=False):
+        self.batch_size = batch_size
+        self.shuffle_batches = shuffle_batches
+        self.drop_last = drop_last
+        self.folder_indices = folder_indices
 
-def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1):
+        # Prepare batches based on folder indexes
+        self.batches = []
+        print(f"[FolderBarchSampler] Preparing batches with batch size {batch_size}, and based on {len(folder_indices.values())} folders")
+        for idxs in folder_indices.values():
+            # Divide los índices de la carpeta en batches
+            for i in range(0, len(idxs), batch_size):
+                batch = idxs[i:i+batch_size]
+                if drop_last and len(batch) < batch_size:
+                    continue
+                self.batches.append(batch)
+
+    def __iter__(self):
+        batches = self.batches.copy()
+        if self.shuffle_batches:
+            random.shuffle(batches)
+        return iter(batches)
+
+    def __len__(self):
+        return len(self.batches)
+
+def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1, sampler=distributed.DistributedSampler):
     """Return an InfiniteDataLoader or DataLoader for training or validation set."""
     batch = min(batch, len(dataset))
     nd = torch.cuda.device_count()  # number of CUDA devices
@@ -100,15 +129,28 @@ def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1):
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
     generator = torch.Generator()
     generator.manual_seed(6148914691236517205 + RANK)
-    return InfiniteDataLoader(dataset=dataset,
-                              batch_size=batch,
-                              shuffle=shuffle and sampler is None,
-                              num_workers=nw,
-                              sampler=sampler,
-                              pin_memory=PIN_MEMORY,
-                              collate_fn=getattr(dataset, 'collate_fn', None),
-                              worker_init_fn=seed_worker,
-                              generator=generator)
+    
+    if hasattr(dataset, 'im_files_folder'):
+        batch_sampler = FolderBatchSampler(dataset.im_files_folder, batch_size=batch, shuffle_batches=shuffle, drop_last=False)
+        return InfiniteDataLoader(
+                dataset=dataset,
+                batch_sampler=batch_sampler,
+                num_workers=nw,
+                pin_memory=PIN_MEMORY,
+                collate_fn=getattr(dataset, 'collate_fn', None),
+                worker_init_fn=seed_worker,
+                generator=generator
+        )
+    else:
+        return InfiniteDataLoader(dataset=dataset,
+                                batch_size=batch,
+                                shuffle=shuffle and sampler is None,
+                                num_workers=nw,
+                                sampler=sampler,
+                                pin_memory=PIN_MEMORY,
+                                collate_fn=getattr(dataset, 'collate_fn', None),
+                                worker_init_fn=seed_worker,
+                                generator=generator)
 
 
 def check_source(source):

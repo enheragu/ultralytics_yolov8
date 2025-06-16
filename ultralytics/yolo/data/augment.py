@@ -495,21 +495,27 @@ class RandomHSV:
 
         if channels == 4: ## EEHA Augmentation with HSV for four channel images
             if self.hgain or self.sgain or self.vgain:
-                r = np.random.uniform(-1, 1, 4) * [self.hgain, self.sgain, self.vgain, self.vgain] + 1  # rando gains
-                first_three_channels = img[:, :, :3]
-                thch = img[:, :, 3]
-                hue, sat, val = cv2.split(cv2.cvtColor(first_three_channels, cv2.COLOR_BGR2HSV)) # Get first 3 channels
+                r_gains = np.random.uniform(-1, 1, 4) * [self.hgain, self.sgain, self.vgain, self.vgain] + 1  # rando gains
+                bgr_ch = img[:, :, :3]
+                th_ch = img[:, :, 3]
+                b,g,r = cv2.split(bgr_ch)
+                hue,sat,val= cv2.split(cv2.cvtColor(bgr_ch, cv2.COLOR_BGR2HSV)) # Get first 3 channels
                 dtype = img.dtype
 
                 x = np.arange(0, 256, dtype=r.dtype)
-                lut_hue = ((x * r[0]) % 180).astype(dtype)
-                lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
-                lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
-                lut_thch = np.clip(x * r[3], 0, 255).astype(dtype)
-
-                im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
-                h,s,v = cv2.split(cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR))
-                img = cv2.merge((h,s,v,cv2.LUT(thch, lut_thch)))
+                
+                # Only modify channels if are non-zero
+                if np.max(hue) > 1e-6:
+                    lut_hue = ((x * r_gains[0]) % 180).astype(dtype)
+                    lut_sat = np.clip(x * r_gains[1], 0, 255).astype(dtype)
+                    lut_val = np.clip(x * r_gains[2], 0, 255).astype(dtype)
+                    im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
+                    b,g,r = cv2.split(cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR))
+                if np.max(th_ch) > 1e-6:
+                    lut_th_ch = np.clip(x * r_gains[3], 0, 255).astype(dtype)
+                    th_ch = cv2.LUT(th_ch, lut_th_ch)
+                
+                img = cv2.merge((b,g,r,th_ch))
                 
         elif channels == 3: # NEEDS 3 CHANNELS FOR THIS TRANSFORMATIONS
             if self.hgain or self.sgain or self.vgain:

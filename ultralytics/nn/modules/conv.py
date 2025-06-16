@@ -333,30 +333,64 @@ class FilterInput(nn.Module):
                 channels = list(args)
         else:
             channels = kwargs.get('channels', None)
+        
         if channels is None:
-            raise ValueError("FilterInput requires 'channels' argument to specify which channels to keep.")
+            raise ValueError(f"{self.__class__.__name__} requires 'channels' argument to specify which channels to keep.")
         self.channels = channels
 
     def forward(self, x):
         # Just channels selected
         # print(f"FilterInput: Keeping channels {self.channels} from input with shape {x.shape}")
-        # return x
         # print(f"FilterInput: Keeping channels {self.channels} from input with shape {x.shape}")
         new_x = x[:, self.channels, ...]
         # print(f"FilterInput: New shape after filtering {new_x.shape}")
         return new_x
 
+global_filter_input_idx = 0
 class FilterInputDetach(FilterInput):
-    def __init__(self, channels):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Debugging criteria images :)
+        self.stored = -1 # Theres a first forward when model is checked before training starts
+        global global_filter_input_idx
+        self.idx = global_filter_input_idx
+        global_filter_input_idx += 1
 
     def forward(self, inputs):
         # inputs: list [layer to base filter decision, layer to be outputed based on decision]
-        filter_input, rama_input = inputs
-        selected = filter_input[:, self.channels, ...]
-        
-        # If all inputs from decision layer are 0, detach :)
-        if torch.all(selected == 0):
-            return rama_input.detach()
+        input_data, input_filter = inputs
+        selected = input_filter[0, self.channels[0], ...] 
+        # Fast check just one channel from just one image. 
+        # Check with margin (normalization can cause zeroes to move a bit)
+        is_all_zero = torch.all(torch.abs(selected) < 1e-6)
+
+        if self.stored < 15:
+            import os
+            import cv2 as cv
+            print(f"FilterInputDetach: filter_input shape: {input_filter.shape}, selected shape: {selected.shape}, is_all_zero: {is_all_zero}")
+            store = input_filter[:, self.channels, ...]
+            store = store[0].cpu().numpy() # take first image from batch
+            store = np.stack([cv.normalize(ch, None, 0, 255, cv.NORM_MINMAX) for ch in store])
+            store = store.astype(np.uint8)
+            image = np.transpose(store, (1, 2, 0))
+            
+            # Set from RGB pytorch to BGR OpenCV (anyway images have suffered data augmetnation with color swithc)
+            if image.shape[2] == 3:
+                image = cv.cvtColor(image, cv.COLOR_RGB2BGR)
+
+            print(f"FilterInputDetach: Saving debug image with shape {image.shape} and channels {self.channels}")
+            save_path = '/home/arvc/tmp_latefusion_split/'
+            if not os.path.exists('/home/arvc/tmp_latefusion_split/'):
+                os.makedirs('/home/arvc/tmp_latefusion_split/')
+            file_name = f'{save_path}/batch_{self.stored}_FilterInputDetach_{self.idx}_channels_{"".join(map(str, self.channels))}_{"all_zero" if is_all_zero else "not_zero"}.png'
+            cv.imwrite(file_name, image)
+            # print(f"FilterInputDetach: Saving debug image to {file_name}")
+            self.stored += 1
+
+
+        if is_all_zero:
+            print(f"FilterInputDetach: Detaching input layer!")
+            return input_data.detach()
         else:
-            return rama_input
+            return input_data

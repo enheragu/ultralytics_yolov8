@@ -329,7 +329,6 @@ def plot_images(images,
     if np.max(images[0]) <= 1:
         images *= 255  # de-normalise (optional)
 
-
     ## EEHA Takes a max of 3 channels when more are provided
     # Stil in torch format, position 0 is numer of channels
     channels = 3 if images[0].shape[0] > 3 else images[0].shape[0]
@@ -359,6 +358,8 @@ def plot_images(images,
     # Turn to BGR image to have colors in labeling and text :)
     if channels == 1:
         mosaic = cv2.cvtColor(mosaic, cv2.COLOR_GRAY2BGR)
+    # if channels == 3:
+    #     mosaic = cv2.cvtColor(mosaic, cv2.COLOR_RGB2BGR)
     if channels == 2:
         ch1, ch2 = cv2.split(mosaic)
         mosaic = cv2.merge([ch1,ch2,np.zeros(ch1.shape,mosaic.dtype)])
