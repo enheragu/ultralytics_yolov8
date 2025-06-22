@@ -103,7 +103,7 @@ class FolderBatchSampler(BatchSampler):
 
         # Prepare batches based on folder indexes
         self.batches = []
-        print(f"[FolderBarchSampler] Preparing batches with batch size {batch_size}, and based on {len(folder_indices.values())} folders")
+        print(f"[FolderBatchSampler] Preparing batches with batch size {batch_size}, and based on {len(folder_indices.values())} folders")
         for idxs in folder_indices.values():
             # Divide los índices de la carpeta en batches
             for i in range(0, len(idxs), batch_size):
@@ -131,6 +131,7 @@ def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1, sampler=dis
     generator.manual_seed(6148914691236517205 + RANK)
     
     if hasattr(dataset, 'im_files_folder'):
+        # print(f"Load data with FolderBatchSampler from: {dataset.im_files_folder}")
         batch_sampler = FolderBatchSampler(dataset.im_files_folder, batch_size=batch, shuffle_batches=shuffle, drop_last=False)
         return InfiniteDataLoader(
                 dataset=dataset,

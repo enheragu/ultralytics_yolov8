@@ -26,6 +26,7 @@ default_space = {
     'hsv_h': tune.uniform(0.0, 0.1),  # image HSV-Hue augmentation (fraction)
     'hsv_s': tune.uniform(0.0, 0.9),  # image HSV-Saturation augmentation (fraction)
     'hsv_v': tune.uniform(0.0, 0.9),  # image HSV-Value augmentation (fraction)
+    'hsv_t': tune.uniform(0.0, 0.9),  # image HSV-Value augmentation (fraction) # EEHA fourth channel augmentation param
     'degrees': tune.uniform(0.0, 45.0),  # image rotation (+/- deg)
     'translate': tune.uniform(0.0, 0.9),  # image translation (+/- fraction)
     'scale': tune.uniform(0.0, 0.9),  # image scale (+/- gain)

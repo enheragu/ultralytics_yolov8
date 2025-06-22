@@ -132,8 +132,10 @@ class BaseDataset(Dataset):
         
         im_files_folder = defaultdict(list)
         for file_idx, file_path in enumerate(im_files):
-            file_path_abs = str(Path(file_path).resolve())
+            # Resolve will resolve symlinks making base path to not match
+            file_path_abs = file_path #str(Path(file_path).resolve())
             for base_path in img_path_list:
+                # print(f"Base path {base_path} for {file_path_abs}")
                 if file_path_abs.startswith(base_path):
                     im_files_folder[base_path].append(file_idx)
                     break

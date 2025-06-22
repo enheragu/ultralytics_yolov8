@@ -301,7 +301,7 @@ class BaseTrainer:
                     params[name] = param.grad.abs().mean().item()
                 else:
                     params[name] = math.nan
-                    print(f"Parameter {name} has no gradient, storing NaN :)")
+                    # print(f"Parameter {name} has no gradient, storing NaN :)")
             return params
     
         # EEHA - Accumulate gradients during whole epoch

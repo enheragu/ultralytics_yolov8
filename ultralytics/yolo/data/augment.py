@@ -483,10 +483,11 @@ class RandomPerspective:
 
 class RandomHSV:
 
-    def __init__(self, hgain=0.5, sgain=0.5, vgain=0.5) -> None:
+    def __init__(self, hgain=0.5, sgain=0.5, vgain=0.5, tgain=0.5) -> None:
         self.hgain = hgain
         self.sgain = sgain
         self.vgain = vgain
+        self.tgain = tgain
 
     def __call__(self, labels):
         """Applies random horizontal or vertical flip to an image with a given probability."""
@@ -494,8 +495,8 @@ class RandomHSV:
         channels = 1 if len(img.shape) == 2 else img.shape[2] # EEHA: One channel image has no extra dimmension
 
         if channels == 4: ## EEHA Augmentation with HSV for four channel images
-            if self.hgain or self.sgain or self.vgain:
-                r_gains = np.random.uniform(-1, 1, 4) * [self.hgain, self.sgain, self.vgain, self.vgain] + 1  # rando gains
+            if self.hgain or self.sgain or self.vgain or self.tgain:
+                r_gains = np.random.uniform(-1, 1, 4) * [self.hgain, self.sgain, self.vgain, self.tgain] + 1  # random gains
                 bgr_ch = img[:, :, :3]
                 th_ch = img[:, :, 3]
                 b,g,r = cv2.split(bgr_ch)
@@ -848,7 +849,7 @@ def v8_transforms(dataset, imgsz, hyp):
         pre_transform,
         MixUp(dataset, pre_transform=pre_transform, p=hyp.mixup),
         Albumentations(p=1.0),
-        RandomHSV(hgain=hyp.hsv_h, sgain=hyp.hsv_s, vgain=hyp.hsv_v),
+        RandomHSV(hgain=hyp.hsv_h, sgain=hyp.hsv_s, vgain=hyp.hsv_v, tgain=hyp.hsv_t),
         RandomFlip(direction='vertical', p=hyp.flipud),
         RandomFlip(direction='horizontal', p=hyp.fliplr, flip_idx=flip_idx)])  # transforms
 
