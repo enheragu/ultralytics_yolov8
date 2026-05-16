@@ -394,8 +394,10 @@ class BaseTrainer:
                 self.scaler.scale(self.loss).backward()
     
                 ## EEHA - Plot the graph of the backpropagation result of the model
-                store_indexes = np.linspace(0, nb - 1, 15, dtype=int) # Store 15 first batches per epoch distributed evenly
-                if self.args.plots and i in store_indexes:
+                # store_indexes = np.linspace(0, nb - 1, 15, dtype=int) # Store 15 first batches per epoch distributed evenly
+                store_indexes = range(0, 20)
+                if False and self.args.plots and i in store_indexes: 
+                    ## DO not store gradients for now :)
                     batch_grads = store_params(self.model)
                     epoch_accum_grads = accumulateGrads(epoch_accum_grads, batch_grads)
                     output_file = gradients_output_path / f'graph_epoch_{epoch}_batch{i}.yaml'
@@ -449,7 +451,7 @@ class BaseTrainer:
             torch.cuda.empty_cache()  # clears GPU vRAM at end of epoch, can help with out of memory errors
 
             ## EEHHA - Store epoch gradient
-            if self.args.plots:
+            if False and self.args.plots:
                 train_accum_grads = accumulateGradsList(train_accum_grads, epoch_accum_grads)
                 output_file = gradients_output_path / f'graph_epoch_{epoch}.yaml'
                 dumpYaml(output_file, epoch_accum_grads, 'a')
@@ -486,7 +488,7 @@ class BaseTrainer:
 
         ## EEHHA - Store epoch gradient
         epoch_best_fit_index = self.stopper.best_epoch - 1 if self.stopper.best_epoch > 0 else 0
-        if self.args.plots:
+        if False and self.args.plots:
             train_accum_grads = accumulateGradsListIdx(train_accum_grads, epoch_best_fit_index)
             output_file = gradients_output_path / f'graph_whole_train.yaml'
             dumpYaml(output_file, train_accum_grads, 'a')

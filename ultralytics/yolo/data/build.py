@@ -121,14 +121,15 @@ class FolderBatchSampler(BatchSampler):
     def __len__(self):
         return len(self.batches)
 
-def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1, sampler=distributed.DistributedSampler):
+def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1, sampler=distributed.DistributedSampler, seed=0): ## EEHA add seed
     """Return an InfiniteDataLoader or DataLoader for training or validation set."""
     batch = min(batch, len(dataset))
     nd = torch.cuda.device_count()  # number of CUDA devices
     nw = min([os.cpu_count() // max(nd, 1), batch if batch > 1 else 0, workers])  # number of workers
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
     generator = torch.Generator()
-    generator.manual_seed(6148914691236517205 + RANK)
+    # generator.manual_seed(6148914691236517205 + RANK)
+    generator.manual_seed(seed) # EEHA popagate seed to dataloader workers
     
     if hasattr(dataset, 'im_files_folder'):
         # print(f"Load data with FolderBatchSampler from: {dataset.im_files_folder}")

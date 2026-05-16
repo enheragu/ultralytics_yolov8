@@ -143,7 +143,8 @@ def create_dataloader(path,
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
     loader = DataLoader if image_weights or close_mosaic else InfiniteDataLoader  # DataLoader allows attribute updates
     generator = torch.Generator()
-    generator.manual_seed(6148914691236517205 + seed + RANK)
+    # generator.manual_seed(6148914691236517205 + seed + RANK)
+    generator.manual_seed(seed) # EEHA propagate seed user configured seed to dataloader workers
     return loader(dataset,
                   batch_size=batch_size,
                   shuffle=shuffle and sampler is None,
@@ -978,7 +979,7 @@ def autosplit(path=DATASETS_DIR / 'coco128/images', weights=(0.9, 0.1, 0.0), ann
     path = Path(path)  # images dir
     files = sorted(x for x in path.rglob('*.*') if x.suffix[1:].lower() in IMG_FORMATS)  # image files only
     n = len(files)  # number of files
-    random.seed(0)  # for reproducibility
+    # random.seed(0)  # for reproducibility
     indices = random.choices([0, 1, 2], weights=weights, k=n)  # assign each image to a split
 
     txt = ['autosplit_train.txt', 'autosplit_val.txt', 'autosplit_test.txt']  # 3 txt files

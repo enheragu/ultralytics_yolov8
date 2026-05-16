@@ -365,32 +365,36 @@ class FilterInputDetach(FilterInput):
         # Check with margin (normalization can cause zeroes to move a bit)
         is_all_zero = torch.all(torch.abs(selected) < 1e-6)
 
-        if self.stored < 15:
+        if False: #self.stored < 20:
             import os
             import cv2 as cv
             print(f"FilterInputDetach: filter_input shape: {input_filter.shape}, selected shape: {selected.shape}, is_all_zero: {is_all_zero}")
             store = input_filter[:, self.channels, ...]
             store = store[0].cpu().numpy() # take first image from batch
-            store = np.stack([cv.normalize(ch, None, 0, 255, cv.NORM_MINMAX) for ch in store])
-            store = store.astype(np.uint8)
-            image = np.transpose(store, (1, 2, 0))
-            
-            # Set from RGB pytorch to BGR OpenCV (anyway images have suffered data augmetnation with color swithc)
-            if image.shape[2] == 3:
-                image = cv.cvtColor(image, cv.COLOR_RGB2BGR)
+            if store is None or store.size == 0:
+                print(f"FilterInputDetach: Warning! store is None or empty, skipping saving debug image.")
+            else:
+                store = np.stack([cv.normalize(ch, None, 0, 255, cv.NORM_MINMAX) for ch in store])
+                store = store.astype(np.uint8)
+                image = np.transpose(store, (1, 2, 0))
+                
+                # Set from RGB pytorch to BGR OpenCV (anyway images have suffered data augmetnation with color swithc)
+                if image.shape[2] == 3:
+                    image = cv.cvtColor(image, cv.COLOR_RGB2BGR)
 
-            print(f"FilterInputDetach: Saving debug image with shape {image.shape} and channels {self.channels}")
-            save_path = '/home/arvc/tmp_latefusion_split/'
-            if not os.path.exists('/home/arvc/tmp_latefusion_split/'):
-                os.makedirs('/home/arvc/tmp_latefusion_split/')
-            file_name = f'{save_path}/batch_{self.stored}_FilterInputDetach_{self.idx}_channels_{"".join(map(str, self.channels))}_{"all_zero" if is_all_zero else "not_zero"}.png'
-            cv.imwrite(file_name, image)
-            # print(f"FilterInputDetach: Saving debug image to {file_name}")
-            self.stored += 1
+                print(f"FilterInputDetach: Saving debug image with shape {image.shape} and channels {self.channels}")
+                save_path = '/home/arvc/tmp_latefusion_split/'
+                if not os.path.exists('/home/arvc/tmp_latefusion_split/'):
+                    os.makedirs('/home/arvc/tmp_latefusion_split/')
+                # file_name = f'{save_path}/batch_{self.stored}_FilterInputDetach_{self.idx}_channels_{"".join(map(str, self.channels))}_{"all_zero" if is_all_zero else "not_zero"}.png'
+                file_name = f'{save_path}/batch_{self.stored}_FilterInputDetach_channels_{"".join(map(str, self.channels))}_{"all_zero" if is_all_zero else "not_zero"}.png'
+                cv.imwrite(file_name, image)
+                # print(f"FilterInputDetach: Saving debug image to {file_name}")
+                self.stored += 1
 
 
         if is_all_zero:
-            print(f"FilterInputDetach: Detaching input layer!")
+            # print(f"FilterInputDetach: Detaching input layer for branch with channels: {self.channels}!")
             return input_data.detach()
         else:
             return input_data

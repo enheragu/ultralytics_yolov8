@@ -213,16 +213,17 @@ class DetectionValidator(BaseValidator):
                 correct[matches[:, 1].astype(int), i] = True
         return torch.tensor(correct, dtype=torch.bool, device=detections.device)
 
-    def build_dataset(self, img_path, mode='val', batch=None):
+    def build_dataset(self, img_path, mode='val', batch=None, ch=3):
         """Build YOLO Dataset
 
         Args:
             img_path (str): Path to the folder containing images.
             mode (str): `train` mode or `val` mode, users are able to customize different augmentations for each mode.
             batch (int, optional): Size of batches, this is for `rect`. Defaults to None.
+            ch (int): Number of image channels to load. Defaults to 3.
         """
         gs = max(int(de_parallel(self.model).stride if self.model else 0), 32)
-        return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, stride=gs)
+        return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, stride=gs, ch=ch)
 
     def get_dataloader(self, dataset_path, batch_size):
         """TODO: manage splits differently."""
@@ -244,8 +245,8 @@ class DetectionValidator(BaseValidator):
                                      shuffle=False,
                                      seed=self.args.seed)[0]
 
-        dataset = self.build_dataset(dataset_path, batch=batch_size, mode='val')
-        dataloader = build_dataloader(dataset, batch_size, self.args.workers, shuffle=False, rank=-1)
+        dataset = self.build_dataset(dataset_path, batch=batch_size, mode='val', ch=self.model.yaml.get('ch', 3))  ## EEHA propagate ch from model yaml
+        dataloader = build_dataloader(dataset, batch_size, self.args.workers, shuffle=False, rank=-1, seed=self.args.seed) ## EEHA add seed to propagate to dataloader)
         return dataloader
 
     def plot_val_samples(self, batch, ni):

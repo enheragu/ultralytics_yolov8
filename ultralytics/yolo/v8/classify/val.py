@@ -65,7 +65,7 @@ class ClassificationValidator(BaseValidator):
     def get_dataloader(self, dataset_path, batch_size):
         """Builds and returns a data loader for classification tasks with given parameters."""
         dataset = self.build_dataset(dataset_path)
-        return build_dataloader(dataset, batch_size, self.args.workers, rank=-1)
+        return build_dataloader(dataset, batch_size, self.args.workers, rank=-1, seed=self.args.seed) ## EEHA add seed to propagate to dataloader)
 
     def print_results(self):
         """Prints evaluation metrics for YOLO object detection model."""
