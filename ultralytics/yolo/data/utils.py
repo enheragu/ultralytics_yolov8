@@ -73,13 +73,20 @@ def verify_image_label(args):
             if len(im.shape) > 2: ## EEHA keep requested CH if input has more than one CH
                 im = im[:,:,:ch]
             shape = im.shape
-            shape = (shape[1], shape[0])  # hw
+            shape = (shape[0], shape[1])  # hw  ## EEHA FIXED 2026-06-19 (was transposed (W,H)) -- see note in the .npz branch
         elif ".npz" in im_file:
             im = np.load(im_file)["image"]
             if len(im.shape) > 2: ## EEHA keep requested CH if input has more than one CH
                 im = im[:,:,:ch]
             shape = im.shape
-            shape = (shape[1], shape[0])  # hw
+            ## EEHA FIXED 2026-06-19: numpy shape is (H,W,C), so this must be (H,W) to match the
+            ## jpg/PIL branch. It was previously transposed to (W,H), which under rect=True made npz
+            ## val metrics mildly pessimistic (~-0.3..0.5pp mAP50, ~-1.1pp mAP50-95, A/B-measured) and
+            ## the SAVED detection labels transposed. CLEAN-BREAK NOTE: results produced BEFORE this fix
+            ## are the "pre-fix" stage; after fixing, npz label *.cache must be invalidated so the cached
+            ## shape rebuilds correctly, and scripts/reconstruct_results.py (which relied on the
+            ## transposed cache) no longer applies to runs validated after this point.
+            shape = (shape[0], shape[1])  # hw
         else:
             # Verify images
             im = Image.open(im_file)

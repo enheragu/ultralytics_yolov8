@@ -245,7 +245,12 @@ class DetectionValidator(BaseValidator):
                                      shuffle=False,
                                      seed=self.args.seed)[0]
 
-        dataset = self.build_dataset(dataset_path, batch=batch_size, mode='val', ch=self.model.yaml.get('ch', 3))  ## EEHA propagate ch from model yaml
+        ## EEHA propagate ch from model yaml. Standalone val wraps the model in AutoBackend (.model.yaml);
+        ## the trainer path passes a DetectionModel (.yaml). Handle both so re-validating a .pt does not crash.
+        _ch = (self.model.yaml.get('ch', 3) if hasattr(self.model, 'yaml')
+               else self.model.model.yaml.get('ch', 3) if hasattr(self.model, 'model') and hasattr(self.model.model, 'yaml')
+               else 3)
+        dataset = self.build_dataset(dataset_path, batch=batch_size, mode='val', ch=_ch)
         dataloader = build_dataloader(dataset, batch_size, self.args.workers, shuffle=False, rank=-1, seed=self.args.seed) ## EEHA add seed to propagate to dataloader)
         return dataloader
 
