@@ -360,15 +360,18 @@ class FilterInputDetach(FilterInput):
     def forward(self, inputs):
         # inputs: list [layer to base filter decision, layer to be outputed based on decision]
         input_data, input_filter = inputs
-        selected = input_filter[0, self.channels[0], ...] 
-        # Fast check just one channel from just one image. 
-        # Check with margin (normalization can cause zeroes to move a bit)
-        is_all_zero = torch.all(torch.abs(selected) < 1e-6)
+        # EEHA - Per-sample, all-channel modality gating. For every sample whose modality
+        #        (self.channels) is absent from the raw input (all its channels ~0), detach this
+        #        branch's gradient: the forward path is untouched, but missing-modality samples
+        #        don't train this branch. Decision is per-sample, so it no longer relies on
+        #        FolderBatchSampler keeping batches modality-homogeneous, and ALL channels of the
+        #        modality are checked (not only channels[0]). Margin absorbs normalization jitter.
+        is_zero = (input_filter[:, self.channels, ...].abs() < 1e-6).all(dim=(1, 2, 3))  # [B] bool per sample
 
         if False: #self.stored < 20:
             import os
             import cv2 as cv
-            print(f"FilterInputDetach: filter_input shape: {input_filter.shape}, selected shape: {selected.shape}, is_all_zero: {is_all_zero}")
+            print(f"FilterInputDetach: filter shape: {input_filter.shape}, channels {self.channels}, is_zero: {is_zero.tolist()}")
             store = input_filter[:, self.channels, ...]
             store = store[0].cpu().numpy() # take first image from batch
             if store is None or store.size == 0:
@@ -387,14 +390,17 @@ class FilterInputDetach(FilterInput):
                 if not os.path.exists('/home/arvc/tmp_latefusion_split/'):
                     os.makedirs('/home/arvc/tmp_latefusion_split/')
                 # file_name = f'{save_path}/batch_{self.stored}_FilterInputDetach_{self.idx}_channels_{"".join(map(str, self.channels))}_{"all_zero" if is_all_zero else "not_zero"}.png'
-                file_name = f'{save_path}/batch_{self.stored}_FilterInputDetach_channels_{"".join(map(str, self.channels))}_{"all_zero" if is_all_zero else "not_zero"}.png'
+                file_name = f'{save_path}/batch_{self.stored}_FilterInputDetach_channels_{"".join(map(str, self.channels))}_{"all_zero" if bool(is_zero[0]) else "not_zero"}.png'
                 cv.imwrite(file_name, image)
                 # print(f"FilterInputDetach: Saving debug image to {file_name}")
                 self.stored += 1
 
 
-        if is_all_zero:
-            # print(f"FilterInputDetach: Detaching input layer for branch with channels: {self.channels}!")
-            return input_data.detach()
-        else:
-            return input_data
+        # Fast paths reproduce the previous behaviour EXACTLY for modality-homogeneous batches
+        # (the only kind FolderBatchSampler produces), so in-flight/queued split runs stay numerically
+        # unchanged; the torch.where branch only adds correctness when a batch mixes modalities.
+        if not is_zero.any():
+            return input_data             # modality present in every sample (image pairs / validation)
+        if is_zero.all():
+            return input_data.detach()    # modality absent in the whole batch
+        return torch.where(is_zero.view(-1, 1, 1, 1), input_data.detach(), input_data)
