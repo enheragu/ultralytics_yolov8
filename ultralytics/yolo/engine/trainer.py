@@ -507,7 +507,10 @@ class BaseTrainer:
         yaml_data['system_data']['python_v'] = sys.version
         yaml_data['system_data']['torch_v'] = str(torch.__version__)
         yaml_data['system_data']['device_type'] = device_type
-        dumpYaml(Path(self.save_dir) / f'results.yaml', yaml_data, 'a')
+        results_path = Path(self.save_dir) / f'results.yaml'
+        existing_results = parseYaml(results_path) or {}
+        existing_results.update(yaml_data)
+        dumpYaml(results_path, existing_results)
 
     def save_model(self):
         """Save model checkpoints based on various conditions."""
